@@ -18,7 +18,8 @@ function chen(bb, chess, def) {
     };
     if (blocked(wave.x + wave.dx * 0.25, wave.y + wave.dy * 0.25)) {
       const dx = wave.dx;
-      wave.dx = wave.dy; wave.dy = -dx; wave.hits.clear();
+      // World +y points up: (dx, dy) -> (dy, -dx) is a clockwise wall turn.
+      wave.dx = wave.dy; wave.dy = 0 - dx; wave.hits.clear();
     }
     const to = { x: wave.x + wave.dx * 1.5 * TICK, y: wave.y + wave.dy * 1.5 * TICK };
     if (blocked(to.x, to.y) || wave.age >= def.skill.duration) { unit.mem.chenWave = null; return; }

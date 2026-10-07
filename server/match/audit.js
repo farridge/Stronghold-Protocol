@@ -67,6 +67,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
     try { fn(); } catch (e) { fail(`audit ${label} threw: ${e && e.message}`); }
   };
   const carries = (ps) => gd.leftoverKeptBands.includes(ps.bandId);
+  const balanceAfter = (before, delta) => m.fundsTest === true ? 99 : before + delta;
   const wrap = (obj, name, around) => {
     const orig = obj[name];
     if (typeof orig !== 'function') return;
@@ -152,7 +153,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
           if (inc.initial.income !== want || inc.initial.pending !== p0) fail(`${id}: onIncome started with ${inc.initial.income}+${inc.initial.pending}, expected ${want}+${p0}`);
           const nn = (v) => (Number.isFinite(v) && v > 0 ? Math.trunc(v) : 0);
           const credited = nn(inc.ev.income) + nn(inc.ev.pending);
-          if (ps.funds - f0 !== credited) fail(`${id}: funds ${f0} → ${ps.funds}, credited ${credited}`);
+          if (ps.funds !== balanceAfter(f0, credited)) fail(`${id}: funds ${f0} → ${ps.funds}, credited ${credited}`);
         }
         const upWant = r > 1 ? Math.max(0, up0 - 1) : up0;
         if (ps.shop.upgradePrice !== upWant) fail(`${id}: upgrade price ${up0} → ${ps.shop.upgradePrice}, expected ${upWant}`);
@@ -184,7 +185,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const res = orig(slotIdx);
       if (res && res.ok) check('buy', () => {
         if (!slot || !slot.sold) fail(`${ps.playerId}: bought slot ${slotIdx} is not marked sold`);
-        if (ps.funds !== f0 - price && !fx && !hasSpendEffects(m, ps)) fail(`${ps.playerId}: buy paid ${f0 - ps.funds}, price ${price}`);
+        if (ps.funds !== balanceAfter(f0, -price) && !fx && !hasSpendEffects(m, ps)) fail(`${ps.playerId}: buy paid ${f0 - ps.funds}, price ${price}`);
       });
       return res;
     });
@@ -195,7 +196,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const fx = hasSpendEffects(m, ps);
       const res = orig(uid);
       if (res && res.ok) check('sell', () => {
-        if (ps.funds - f0 !== gain && !fx && !hasSpendEffects(m, ps)) fail(`${ps.playerId}: sell paid ${ps.funds - f0}, expected ${gain}`);
+        if (ps.funds !== balanceAfter(f0, gain) && !fx && !hasSpendEffects(m, ps)) fail(`${ps.playerId}: sell paid ${ps.funds - f0}, expected ${gain}`);
         if (ps.find(uid)) fail(`${ps.playerId}: sold piece ${uid} still owned`);
       });
       return res;
@@ -208,7 +209,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const res = orig();
       if (res && res.ok && !fx && !hasSpendEffects(m, ps)) check('refresh', () => {
         const paid = f0 - ps.funds;
-        if (free ? paid !== 0 || ps.shop.freeRefreshes !== fr0 - 1 : paid !== gd.refreshPrice) fail(`${ps.playerId}: refresh (free ${free}) paid ${paid}`);
+        if (free ? paid !== 0 || ps.shop.freeRefreshes !== fr0 - 1 : ps.funds !== balanceAfter(f0, -gd.refreshPrice)) fail(`${ps.playerId}: refresh (free ${free}) paid ${paid}`);
       });
       return res;
     });
@@ -220,7 +221,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const res = orig();
       if (res && res.ok) check('levelUp', () => {
         if (ps.shop.level !== lv + 1) fail(`${ps.playerId}: level ${lv} → ${ps.shop.level}`);
-        if (f0 - ps.funds !== price && !fx && !hasSpendEffects(m, ps)) fail(`${ps.playerId}: level-up paid ${f0 - ps.funds}, price ${price}`);
+        if (ps.funds !== balanceAfter(f0, -price) && !fx && !hasSpendEffects(m, ps)) fail(`${ps.playerId}: level-up paid ${f0 - ps.funds}, price ${price}`);
         const next = gd.upgradeBase(ps.shop.level) ?? 0;
         if (ps.shop.upgradePrice !== next) fail(`${ps.playerId}: upgrade price after level-up ${ps.shop.upgradePrice}, expected ${next}`);
       });
@@ -262,7 +263,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       prepsEnded.set(ps, endedOf(ps) + 1);
       check('prep end', () => {
         // leftover funds are lost at prep end (carry bands excepted); gains after this (SETTLE effects) are kept
-        if (ps.funds !== 0 && !carries(ps)) fail(`${ps.playerId}: kept ${ps.funds} funds past the prep end without a carry band`);
+        if (ps.funds !== balanceAfter(0, 0) && !carries(ps)) fail(`${ps.playerId}: kept ${ps.funds} funds past the prep end without a carry band`);
         overdue(ps, 'its prep end');
         if (ps.offers.length) fail(`${ps.playerId}: reward offer survived the prep end`);
       });
@@ -361,7 +362,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
         const id = ps.playerId;
         overdue(ps, 'into combat');
         if (!ps.ready) fail(`${id}: not ready at combat start`);
-        if (ps.funds !== 0 && !carries(ps)) fail(`${id}: kept ${ps.funds} funds into combat`);
+        if (ps.funds !== balanceAfter(0, 0) && !carries(ps)) fail(`${id}: kept ${ps.funds} funds into combat`);
         if (ps.offers.length) fail(`${id}: reward offer survived the prep`);
         for (const s of ps.shop.slots) if (s && (!s.frozen || s.sold)) fail(`${id}: unfrozen/sold slot ${s.id} survived into combat`);
       }

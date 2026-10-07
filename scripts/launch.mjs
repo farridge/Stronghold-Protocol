@@ -2,7 +2,8 @@
 // scripts/launch.mjs — cross-platform "prepare + start + open the browser", used by scripts/start-windows.bat,
 // scripts/start-windows.ps1 and scripts/start.sh (docs/DEPLOY.md).
 //
-//   node scripts/launch.mjs [--port 3000] [--host 0.0.0.0] [--no-open] [--no-setup] [setup options…]
+//   node scripts/launch.mjs [--funds-test] [--port 3000] [--host 0.0.0.0] [--no-open] [--no-setup] [setup options…]
+//   --funds-test starts the separate fixed-99-funds playtest (default port 3001).
 //
 //   1. If our server already answers on the port, just open the browser (double-clicking twice is harmless).
 //   2. node tools/setup.mjs --quiet (dependencies, vendor libs, art download / resume, optional local extraction);
@@ -30,8 +31,9 @@ if (Number(process.versions.node.split('.')[0]) < 22) {
 const { c, mark } = await import('../tools/setup.mjs');
 const { probePort, classifyAddresses, KIND_LABEL } = await import('../tools/doctor.mjs');
 
-function parseArgs(argv) {
-  const o = { port: Number(process.env.PORT) || 3000, host: process.env.HOST || '0.0.0.0', open: !/^(1|true|yes)$/i.test(process.env.SP_NO_BROWSER || ''), setup: true, setupArgs: [], help: false };
+export function parseArgs(argv) {
+  const fundsTest = argv.includes('--funds-test');
+  const o = { fundsTest, port: fundsTest ? 3001 : Number(process.env.PORT) || 3000, host: process.env.HOST || '0.0.0.0', open: !/^(1|true|yes)$/i.test(process.env.SP_NO_BROWSER || ''), setup: true, setupArgs: [], help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const [k, v] = a.split('=');
@@ -40,6 +42,7 @@ function parseArgs(argv) {
     else if (k === '--host') o.host = val() || o.host;
     else if (a === '--no-open') o.open = false;
     else if (a === '--no-setup') o.setup = false;
+    else if (a === '--funds-test') o.fundsTest = true;
     else if (a === '-h' || a === '--help') o.help = true;
     else if (a === '--game') o.setupArgs.push(a, argv[++i] ?? '');
     else o.setupArgs.push(a);
@@ -67,11 +70,11 @@ function printShare(port) {
   console.log(`${line}\n`);
 }
 
-async function waitHealthy(port, child, timeoutMs = 30000) {
+async function waitHealthy(port, child, fundsTest, timeoutMs = 30000) {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until && child.exitCode === null) {
     const p = await probePort(port);
-    if (p.state === 'ours') return true;
+    if (p.state === 'ours' && !!p.health.fundsTest === fundsTest) return true;
     await new Promise((r) => setTimeout(r, 300));
   }
   return false;
@@ -85,9 +88,14 @@ async function main() {
     return 0;
   }
   const localUrl = `http://localhost:${o.port}`;
+  if (o.fundsTest) console.log(c.warn('干员测试版：对局资金固定 99，支付不减少余额。'));
 
   const before = await probePort(o.port, o.host);
   if (before.state === 'ours') {
+    if (!!before.health.fundsTest !== o.fundsTest) {
+      console.error(`${mark.err} 端口 ${o.port} 已运行另一种版本（--funds-test 模式不同）。请使用其他端口。`);
+      return 1;
+    }
     console.log(`${mark.ok} 服务器已经在运行（端口 ${o.port}），直接打开浏览器。`);
     printShare(o.port);
     if (o.open) openBrowser(localUrl);
@@ -105,7 +113,7 @@ async function main() {
   }
 
   const env = { ...process.env, PORT: String(o.port), HOST: o.host };
-  const child = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js')], { cwd: ROOT, env, stdio: 'inherit' });
+  const child = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js'), ...(o.fundsTest ? ['--funds-test'] : [])], { cwd: ROOT, env, stdio: 'inherit' });
   const forward = (sig) => { if (child.exitCode === null) { try { child.kill(sig); } catch { /* gone */ } } };
   // SIGINT reaches the server straight from the terminal (same process group / console); forwarding it too would make
   // the server's second-signal path force-exit. Other signals (service managers, `kill`) are forwarded.
@@ -113,7 +121,7 @@ async function main() {
   for (const sig of ['SIGTERM', 'SIGHUP', 'SIGBREAK']) { try { process.on(sig, () => forward(sig === 'SIGBREAK' ? 'SIGTERM' : sig)); } catch { /* unsupported here */ } }
 
   const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve(code ?? (signal ? 0 : 1))));
-  if (await waitHealthy(o.port, child)) {
+  if (await waitHealthy(o.port, child, o.fundsTest)) {
     printShare(o.port);
     if (o.open && !openBrowser(localUrl)) console.log(c.dim(`（未能自动打开浏览器，请手动访问 ${localUrl}）`));
   }

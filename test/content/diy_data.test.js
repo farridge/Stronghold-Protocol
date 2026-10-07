@@ -14,6 +14,7 @@ test('selected external operators resolve every tier, skill and elite module wit
       assert.ok(def, `${base}_${state} exists`);
       assert.equal(def.raw.isDiy, true);
       assert.equal(def.raw.visible, false);
+      assert.deepEqual(def.raw.bonds, ['yanShip'], 'both external operators belong only to Yan');
       assert.equal(def.skill.id, `skchr_${name}_${skillIndex + 1}`);
       assert.equal(def.raw.status.skillLevel, state === 'a' ? 4 : 7);
       assert.equal(def.raw.status.equipLevel, state === 'a' ? 0 : tier === 5 ? 1 : 3);

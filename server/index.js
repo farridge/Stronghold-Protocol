@@ -602,7 +602,7 @@ function makeLogger(quiet) {
  * @param {{
  *   port?: number, host?: string, quiet?: boolean, log?: object,
  *   publicDir?: string, dataDir?: string, sharedDir?: string,
- *   MatchClass?: Function, seedFn?: () => number,
+ *   MatchClass?: Function, seedFn?: () => number, fundsTest?: boolean,
  *   lobbyGraceMs?: number, reconnectWindowMs?: number, heartbeatMs?: number, helloTimeoutMs?: number,
  *   ratePerSec?: number, rateBurst?: number, maxConnections?: number, maxRooms?: number,
  *   maxConnectionsPerAddr?: number, maxRoomsPerAddr?: number, maxMatchesPerAddr?: number, resyncMinGapMs?: number,
@@ -633,7 +633,8 @@ export async function startServer(opts = {}) {
   for (const k of ['lobbyGraceMs', 'maxRooms', 'maxRoomsPerAddr', 'maxMatchesPerAddr', 'resyncMinGapMs', 'soloReconnectWindowMs']) {
     if (opts[k] != null) lobbyOptions[k] = opts[k];
   }
-  const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, options: lobbyOptions });
+  const MatchClass = opts.fundsTest === true ? (await import('./match/FundsTestMatch.js')).FundsTestMatch : opts.MatchClass;
+  const lobby = new Lobby({ registry, log, MatchClass, getData: () => data, seedFn: opts.seedFn, options: lobbyOptions });
   const network = new Network({ registry, handler: lobby, log, options: netOptions });
   const serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, log });
   const startedAt = Date.now();
@@ -663,6 +664,7 @@ export async function startServer(opts = {}) {
     if (parts.rawPath === '/healthz') {
       sendJson(req, res, 200, {
         ok: true, version: PROTOCOL_VERSION, app: APP_VERSION, uptimeSec: Math.round((Date.now() - startedAt) / 1000),
+        fundsTest: opts.fundsTest === true,
         // the runtime the server is serving right now (public/js/ui/buildGuard.js): a page whose own build is
         // older than this reloads itself, so a deploy reaches clients that never reload
         build: buildTag(),
@@ -758,13 +760,14 @@ async function main() {
   process.on('uncaughtException', (e) => console.error('[process] uncaught exception', e));
   let srv;
   try {
-    srv = await startServer();
+    srv = await startServer({ fundsTest: process.argv.includes('--funds-test') });
   } catch (e) {
     if (e && e.code === 'EADDRINUSE') console.error(`端口已被占用 / port in use: ${e.port ?? process.env.PORT ?? 3000}. Try PORT=3001 npm start`);
     else console.error('[boot] failed to start', e);
     process.exit(1);
   }
   console.log(`\n  卫戍协议：盟约 · Stronghold Protocol: Alliance v${APP_VERSION}`);
+  if (process.argv.includes('--funds-test')) console.log('  干员测试版：对局资金固定 99，支付不减少余额。');
   console.log(`  Local:   ${srv.url}`);
   if (srv.host === '0.0.0.0' || srv.host === '::') {
     for (const u of lanUrls(srv.port)) console.log(`  LAN:     ${u}`);

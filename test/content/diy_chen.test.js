@@ -72,6 +72,41 @@ test('Chen talent healing uses deterministic random values and dodges exactly on
   assert.equal(h.b.errors.length, 0); checkInvariants(h.b);
 });
 
+test('Chen S3 wall collisions turn clockwise in every deployment direction', () => {
+  const directions = [
+    { dir: 'UP', wall: [11, 6], next: [1, 0] },
+    { dir: 'RIGHT', wall: [10, 7], next: [0, -1] },
+    { dir: 'DOWN', wall: [9, 6], next: [-1, 0] },
+    { dir: 'LEFT', wall: [10, 5], next: [0, 1] },
+  ];
+  for (const tier of [5, 6]) for (const state of ['a', 'b']) for (const { dir, wall, next } of directions) {
+    const rows = Object.fromEntries([9, 10, 11, 12].map((r) => [r, '##rrrrrrrrr##########']));
+    const row = rows[wall[0]].split(''); row[wall[1]] = '#'; rows[wall[0]] = row.join('');
+    const chessId = `chess_diy_${tier}_chen3_${state}`;
+    const h = run(2, [{ key: 'dummy', pos: [10, 6] }], {}, { flat: { rows }, units: [{ chessId, row: 10, col: 6, dir, skillIndex: 2, carryState: { sp: 999 } }] });
+    h.run(0.6);
+    const wave = h.unit(chessId).mem.chenWave;
+    assert.ok(wave, `${chessId} ${dir} survives the wall collision`);
+    assert.deepEqual([wave.dx, wave.dy], next, `${dir} turns clockwise`);
+    assert.ok((wave.x - 6) * next[0] + (wave.y - 10) * next[1] > 0, 'wave travels along its new direction');
+    assert.equal(h.b.errors.length, 0); checkInvariants(h.b);
+  }
+});
+
+test('Chen S3 follows successive walls clockwise without disappearing at a corner', () => {
+  const rows = Object.fromEntries([9, 10, 11, 12].map((r) => [r, '##rrrrrrrrr##########']));
+  for (const [r, c] of [[10, 7], [9, 6]]) {
+    const row = rows[r].split(''); row[c] = '#'; rows[r] = row.join('');
+  }
+  const h = run(2, [{ key: 'dummy', pos: [10, 6] }], {}, { flat: { rows }, units: [{ chessId: id, row: 10, col: 6, dir: 'RIGHT', skillIndex: 2, carryState: { sp: 999 } }] });
+  h.run(1);
+  const wave = h.unit(id).mem.chenWave;
+  assert.ok(wave);
+  assert.deepEqual([wave.dx, wave.dy], [-1, 0], 'right → down → left');
+  assert.ok(wave.x < 6, 'wave continues travelling after the second collision');
+  assert.equal(h.b.errors.length, 0); checkInvariants(h.b);
+});
+
 test('Chen with normal, elite or both dual-mode arms retypes each hit once without multiplying damage', () => {
   const arm = 'chess_item_5_03_e_a', eliteArm = 'chess_item_5_03_e_b';
   for (const tier of [5, 6]) for (const state of ['a', 'b']) for (const skillIndex of [0, 1, 2]) {
