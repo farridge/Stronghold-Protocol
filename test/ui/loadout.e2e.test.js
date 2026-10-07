@@ -91,6 +91,39 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.click(sel);
   };
 
+  test('external selectors work on desktop and a touch phone, persist on reload, and reach the match briefing', async () => {
+    for (const viewport of [{ w: 1920, h: 1080 }, { w: 667, h: 375, touch: true }]) {
+      const { ctx, page, problems } = await open(viewport);
+      try {
+        await clickSel(page, '.lobby-screen [data-testid="loadout-open"]');
+        await page.waitForSelector('.lo-diy select', { visible: true });
+        await page.select('.lo-diy select[aria-label="5阶外援1"]', 'chess_diy_5_chen3_a');
+        await page.waitForSelector('.lo-detail .lo-skill[data-skill="0"]', { visible: true });
+        await page.click('.lo-detail .lo-skill[data-skill="0"]');
+        await page.click('.lo-detail .lo-mod[data-module="none"]');
+        if (viewport.touch) await page.tap('.lo-detail-back');
+        await page.select('.lo-diy select[aria-label="6阶外援1"]', 'chess_diy_6_chen3_a');
+        assert.equal(await page.$eval('.lo-diy select[aria-label="6阶外援1"]', (el) => el.value), '', 'a rejected duplicate restores the visible selection');
+        await page.select('.lo-diy select[aria-label="6阶外援1"]', 'chess_diy_6_wang_a');
+        await page.waitForSelector('.lo-detail .lo-skill.is-on[data-skill="2"]', { visible: true });
+        const choice = await page.evaluate(() => JSON.parse(localStorage.getItem('sp.pref.loadout')));
+        assert.deepEqual(choice.diy, { '5': ['chess_diy_5_chen3_a', null], '6': ['chess_diy_6_wang_a', null] });
+        assert.deepEqual(choice.entries.chess_diy_5_chen3_a, { skill: 0, module: 'none' });
+        if (viewport.touch) await page.tap('.lo-detail-back');
+        await page.screenshot({ path: path.join(OUT, viewport.touch ? 'diy-phone.png' : 'diy-desktop.png') });
+        await page.click('.lo-back');
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => globalThis.__SP__?.store.get().connection.status === 'online');
+        await page.evaluate(() => globalThis.__SP__.net.request('room.create', { mode: 'solo', difficulty: 'NORMAL' }));
+        await waitSt(page, (s) => !!s.room, 'external room');
+        await page.evaluate(() => globalThis.__SP__.net.request('room.start', {}));
+        await waitSt(page, (s) => s.phase === 'INFO_CHECK' && s.loadout?.chess_diy_5_chen3_a, 'external briefing');
+        const diy = await page.evaluate(() => globalThis.__SP__.store.get().match.private.diy);
+        assert.deepEqual(diy, choice.diy); assert.deepEqual(problems, []);
+      } finally { await ctx.close(); }
+    }
+  });
+
   test('desktop: choose S1 + 不装备 for 隐现, persisted, synced into the solo match, briefing entry, auto-close', async () => {
     const { ctx, page, problems } = await open();
     await clickSel(page, '.lobby-screen [data-testid="loadout-open"]');

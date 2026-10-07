@@ -120,3 +120,45 @@ test('Wang S3 only spends ammo on stone redeployments inside its expanded range'
   h.step();
   assert.equal(state.ammo, 20); assert.equal(state.followers.length, 1);
 });
+
+test('a module permits seven board cards but initial Wang stock deploys only six stones', () => {
+  const h = run(0, { units: [{ chessId: id, uid: 1, row: 10, col: 6, skillIndex: 0 },
+    ...Array.from({ length: 7 }, (_, i) => ({ kind: 'token', tokenId: token, ownerUid: 1, uid: i + 2, row: 9, col: i + 3 }))] });
+  h.run(0.1);
+  const owner = h.unit(id), stones = h.b.allyUnits.filter((u) => u.kind === 'token');
+  assert.equal(stones.filter((s) => s.alive).length, 6);
+  assert.equal(owner.mem.wang.stock, 0);
+  owner.skill.activate('test', { free: true });
+  h.b.getPlayer(owner.ownerId).dp = 50; owner.mem.wang.nextOp = 0;
+  h.run(2.2);
+  assert.equal(stones.filter((s) => s.alive).length, 7);
+  assert.equal(owner.mem.wang.stock, 1);
+});
+
+test('a Wang entering unite down never deploys orphaned stones or followers', () => {
+  const h = run(0, { kind: 'unite', units: [{ chessId: id, uid: 1, row: 10, col: 6, carryState: { down: true } },
+    { kind: 'token', tokenId: token, ownerUid: 1, uid: 2, row: 9, col: 7 }] }); h.run(0.1);
+  const owner = h.unit(id);
+  assert.equal(owner.alive, false);
+  assert.equal(h.b.allyUnits.some((u) => u.kind === 'token' && u.alive && u.deployed), false);
+  assert.deepEqual(h.snapshot().stones, []); assert.deepEqual(h.b.errors, []);
+});
+
+test('Wang continuous-line damage and penetration cap at three stacks with or without a module', () => {
+  for (const tier of [5, 6]) for (const moduleId of [undefined, 'none']) {
+    const chessId = `chess_diy_${tier}_wang_b`;
+    const h = run(1, { units: [{ chessId, uid: 1, row: 10, col: 6, skillIndex: 1, moduleId },
+      { kind: 'token', tokenId: token, ownerUid: 1, uid: 2, row: 9, col: 7 }] }); h.run(0.1);
+    const owner = h.unit(chessId), stone = h.b.allyUnits.find((u) => u.kind === 'token');
+    owner.mem.wang.followers = [];
+    addFollowers(h.b, owner, [[9, 8], [9, 9], [9, 10]], 3);
+    h.spawn('dummy', { pos: [9, 7] }); h.step();
+    const hit = h.hooksOf('damaged').find((c) => c.source === stone && c.dmg.tags.includes('wangStone'));
+    const bb = owner.def.talents[1].bb;
+    assert.ok(hit);
+    assert.equal(hit.dmg.mul, 1 + 3 * bb['attack@per_atk_scale']);
+    assert.equal(hit.dmg.resIgnoreFlat, 3 * bb['attack@per_magic_resist_penetrate_fixed']);
+    assert.equal(hit.dmg.amount, stone.s.atk * owner.def.skill.bb['attack@atk_scale']);
+    assert.deepEqual(h.b.errors, []); checkInvariants(h.b);
+  }
+});

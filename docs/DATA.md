@@ -6,6 +6,8 @@ with `docs/research/*.json`. Do not edit them by hand — change the build scrip
 `data/assets.json` is written by `tools/fetch-assets.mjs`, which keeps the current file rather than drop entries whose
 downloads failed on this machine unless `--allow-shrink` (or `--prune`) is passed (docs/ASSETS.md, DESIGN §21.25).
 
+本分支额外生成 8 条可选外援干员记录与望的棋子，复用本构建器并固定活动结束前的历史数据；完整构建会调用 `tools/build-diy.mjs`。固定名册仍为 112 名，干员记录总数为 274、召唤物为 23；下文原始名册的 266 条计数不包含额外外援。数据来源、缓存和重建方式见 [DIY.md](DIY.md)。
+
 ```
 node tools/build-data.mjs              # build (downloads missing official files into .cache/gamedata/)
 node tools/build-data.mjs --offline    # never download; fail if a cached file is missing

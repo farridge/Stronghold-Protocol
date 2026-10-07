@@ -103,11 +103,16 @@ export function wangStoneKit() {
   return { trait: { noAttack: true }, skill: { kind: 'passive' }, install(battle, unit) {
     battle.addBuff(unit, { key: 'wang:trap', flags: { untargetable: true, invulnerable: true }, persist: true, allowDead: true });
     battle.on('deploy', ({ unit: deployed, initial }) => {
-      if (deployed !== unit || !live(unit.ownerUnit)) return;
-      const owner = unit.ownerUnit, state = wangState(owner);
+      if (deployed !== unit) return;
+      const owner = unit.ownerUnit, state = owner ? wangState(owner) : null;
+      // A board-card limit is not stock. Keep a seventh card waiting until a skill grants another stone;
+      // a forced-down unite owner also leaves no invulnerable orphan traps on the field.
+      if (!live(owner) || (initial && state.stock <= 0)) {
+        battle.retreat(unit, { permanent: true, reason: 'expired' }); return;
+      }
       unit.base.atk = owner.s.atk; unit.markDirty();
       unit.mem.wangStone = { r: unit.tileR, c: unit.tileC, axes: new Set(), source: unit, follower: false };
-      if (initial) state.stock = Math.max(0, state.stock - 1);
+      if (initial) state.stock--;
       const active = owner.skill.active && owner.def.skill.id === 'skchr_wang_3'
         && owner.rangeKeySet.has(key(unit.tileR, unit.tileC));
       const n = addFollowers(battle, owner, FOUR.map(([dr, dc]) => [unit.tileR + dr, unit.tileC + dc]), active ? Math.min(3, state.ammo) : 1);

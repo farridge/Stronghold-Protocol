@@ -5,6 +5,8 @@ Owner: `tools/fetch-assets.mjs` and `tools/assets/*`. Research background: `docs
 All art, Spine models and audio are **downloaded at install time**. They are never committed; `public/assets/` is git-ignored.
 Everything the client needs is listed in **`data/assets.json`**. The client should only request URLs that appear in that manifest.
 
+可选外援的素材从 `data/chess.json` 的 `diyAvailable` 记录加入原下载清单，包含本体正反面模型、立绘、头像和三个技能图标；详细说明及望的棋子模型回退见 [DIY.md](DIY.md#数据生成与素材)。
+
 ## Running
 
 ```bash

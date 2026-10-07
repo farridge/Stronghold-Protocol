@@ -32,6 +32,36 @@ describe('operator loadouts in the browser sim', { skip }, () => {
     await srv?.close();
   });
 
+  test('all six external skills and dual-mode arms give identical battle digests and follower snapshots in Chrome and Node', async () => {
+    const ds = getDefaultSource(), tpl = ds.getWave('act1autochess_03');
+    const page = await browser.newPage();
+    await page.goto(`http://127.0.0.1:${srv.port}/sim/spec.js`);
+    try {
+      for (const skillIndex of [0, 1, 2]) for (const moduleId of [undefined, 'none']) {
+        const spec = buildBattleSpec({ battleId: `diy:${skillIndex}:${moduleId}`, fieldId: 'n:p1', kind: 'normal', seed: 2178,
+          modeId: 'mode_multi_normal', round: 3, stageId: 'act2autochess_m01', timeLimit: 110,
+          players: [{ playerId: 'p1', seat: 0, side: 'L', colOffset: 0, bonds: {}, playerEffects: [], units: [
+            { uid: 1, chessId: 'chess_diy_6_chen3_b', row: 9, col: 5, skillIndex, moduleId,
+              items: ['chess_item_5_03_e_b'], carryState: { sp: 999 } },
+            { uid: 2, chessId: 'chess_diy_5_wang_b', row: 10, col: 5, skillIndex, moduleId, carryState: { sp: 999 } },
+            { uid: 3, kind: 'token', tokenId: 'token_10064_wang_stone1', ownerUid: 2, row: 9, col: 7 },
+            { uid: 4, kind: 'token', tokenId: 'token_10064_wang_stone1', ownerUid: 2, row: 12, col: 7 },
+          ] }], routes: tpl.routes, spawns: tpl.spawns.filter((s) => !s.action && !s.slot).map((s) =>
+            ({ time: s.time, enemyKey: s.key, routeIndex: s.routeIndex, count: s.count, interval: s.interval })) });
+        const b = createBattleFromSpec(spec, ds, { quiet: true, recordEvents: false }); b.step();
+        const stones = b.snapshot().stones, hash = resultDigest(b.runToEnd(4000)).hash;
+        const out = await page.evaluate(async (s) => {
+          const { loadBrowserSim } = await import('/js/battle/runner.js');
+          const { spec: S, ds } = await loadBrowserSim();
+          const b = S.createBattleFromSpec(s, ds, { quiet: true, recordEvents: false }); b.step();
+          const stones = b.snapshot().stones;
+          return { stones, hash: S.resultDigest(b.runToEnd(4000)).hash, errors: b.errors.map((e) => e.message) };
+        }, spec);
+        assert.deepEqual(out, { stones, hash, errors: [] }); assert.equal(b.errors.length, 0);
+      }
+    } finally { await page.close(); }
+  });
+
   test('a spec with loadouts resolves the same defs and gives the same digest in Chrome as in Node', async () => {
     const ds = getDefaultSource();
     const tpl = ds.getWave('act1autochess_03');

@@ -131,6 +131,32 @@ describe('room.loadout (lobby + real match)', () => {
   afterEach(async () => { await pool.closeAll(); });
   after(async () => { await srv?.close(); });
 
+  test('external selection follows seats and reconnects, allows the same operator for teammates, and locks after briefing', async () => {
+    const id = 'chess_diy_6_wang_a';
+    const diy = { '5': [null, null], '6': [id, null] };
+    const host = await pool.player('ExtHost');
+    const guest = await pool.player('ExtGuest');
+    await ok(host, { t: 'room.loadout', entries: {}, diy });
+    await ok(guest, { t: 'room.loadout', entries: { [id]: { skill: 1, module: 'none' } }, diy });
+    await err(host, { t: 'room.loadout', entries: {}, diy: { '5': ['chess_diy_5_wang_a', null], '6': [id, null] } }, ERR.BAD_TARGET);
+    const room = await createRoom(host);
+    await ok(guest, { t: 'room.join', code: room.code });
+    await ok(guest, { t: 'room.ready', ready: true });
+    await ok(host, { t: 'room.start' });
+    const initial = await host.waitFor('m.private', (p) => p.diy?.['6']?.[0] === id);
+    assert.deepEqual(initial.diy, diy);
+    await guest.terminate();
+    const back = await pool.player('ExtGuest', guest.token);
+    const resumed = await back.waitFor('m.private', (p) => p.diy?.['6']?.[0] === id);
+    assert.deepEqual(resumed.loadout[id], { skill: 1, module: 'none' });
+    await ok(host, { t: 'room.loadout', entries: { [id]: { skill: 0 } }, diy });
+    await host.waitFor('m.private', (p) => p.loadout?.[id]?.skill === 0);
+    await ok(host, { t: 'g.infoReady' }); await ok(back, { t: 'g.infoReady' });
+    await host.waitFor('m.public', (p) => p.phase !== PHASE.INFO_CHECK);
+    await err(host, { t: 'room.loadout', entries: {}, diy: {} }, ERR.WRONG_PHASE);
+    assert.deepEqual(cap.errors, []);
+  });
+
   test('accepted during INFO_CHECK (the briefing entry), locked afterwards; the solo briefing has no deadline', async () => {
     const a = await pool.player('Solo');
     await createRoom(a, 'solo');

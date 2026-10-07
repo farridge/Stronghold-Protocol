@@ -15,7 +15,7 @@ import {
   changedCount, moduleBadge, attrRows, skillTags, skillLabel, selectedSkill, selectedModule, recordsOf,
   exportPayload, serializeExport, parseImport, LOADOUT_EXPORT_KIND, LOADOUT_VERSION, LOADOUT_IMPORT_MAX_BYTES,
 } from '../../public/js/ui/loadoutModel.js';
-import { installLoadoutSync, SYNC_DEBOUNCE_MS, RETRY_MS, applyLoadoutEntries, setEntries, loadoutStore } from '../../public/js/ui/loadoutSync.js';
+import { installLoadoutSync, SYNC_DEBOUNCE_MS, RETRY_MS, applyLoadoutEntries, setEntries, setDiy, loadoutStore } from '../../public/js/ui/loadoutSync.js';
 import { createStore } from '../../public/js/store.js';
 import { shouldAutoClose } from '../../public/js/screens/loadout.js';
 
@@ -254,6 +254,23 @@ function fakeTimers() {
   };
 }
 const syncStore = (entries = {}) => createStore({ entries, open: false, from: null, sel: null, filters: {}, sync: 'idle' });
+
+test('external selections export with default skills, reject duplicates, and sync independently of skill entries', async () => {
+  const diy = { '5': ['chess_diy_5_chen3_a', null], '6': ['chess_diy_6_wang_a', null] };
+  assert.deepEqual(loadoutStore.get().diy, { '5': [null, null], '6': [null, null] }, 'old preferences migrate to empty');
+  assert.deepEqual(parseImport(serializeExport({}, { diy })).diy, diy);
+  assert.equal(parseImport({ entries: {}, diy: { '5': ['chess_diy_5_wang_a', null], '6': diy['6'] } }).ok, false);
+  const before = loadoutStore.get().diy;
+  assert.equal(setDiy(diy), true); assert.deepEqual(loadoutStore.get().diy, diy);
+  setDiy(before);
+  const net = fakeNet(), T = fakeTimers(), target = syncStore({});
+  target.set({ diy: before });
+  const sync = installLoadoutSync({ net, timers: T, target, getChessReady: async () => CHESS, lookupChess: get });
+  net.emit('welcome', {}); await T.advance(100);
+  target.set({ diy }); await T.advance(SYNC_DEBOUNCE_MS + 10);
+  assert.deepEqual(net.sent.at(-1), { t: 'room.loadout', entries: {}, diy });
+  sync.dispose();
+});
 
 test('sync: welcome sends the sanitised loadout; edits are debounced; identical content is not resent', async () => {
   const net = fakeNet();
@@ -499,4 +516,16 @@ test('entry badge (review fix): counts like the screen once chess.json is loaded
   assert.equal(badgeCount(entries, get), 1, 'with the data: only chess the screen shows as 已调整');
   assert.equal(badgeCount(entries, get), changedCount(entries, get));
   assert.equal(badgeCount({}, get), 0);
+});
+
+test('importing default external choices clears prior skill changes; legacy presets migrate to empty externals', async () => {
+  const { setEntries, setDiy, applyLoadoutEntries, loadoutStore } = await import('../../public/js/ui/loadoutSync.js');
+  const diy = { '5': ['chess_diy_5_chen3_a', null], '6': [null, null] };
+  setEntries({ [INSIDE]: { skill: 0 } }); setDiy(diy);
+  assert.deepEqual(applyLoadoutEntries({}, get, diy), { applied: 0, dropped: 0 });
+  assert.deepEqual(loadoutStore.get().entries, {});
+  assert.deepEqual(loadoutStore.get().diy, diy);
+  assert.equal(applyLoadoutEntries({ [INSIDE]: { skill: 0 } }, get).applied, 1);
+  assert.deepEqual(loadoutStore.get().diy, { '5': [null, null], '6': [null, null] });
+  setEntries({});
 });
