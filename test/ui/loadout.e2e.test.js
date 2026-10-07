@@ -101,7 +101,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     // search → one card
     await page.type('.lo-search input', '隐现');
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
-    await page.click('.lo-card');
+    await page.click('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-skill[data-skill="0"]', { visible: true });
     await page.click('.lo-detail .lo-skill[data-skill="0"]');
     await page.click('.lo-detail .lo-mod[data-module="none"]');
@@ -141,7 +141,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     // one edit, so there is something to export
     await page.type('.lo-search input', '隐现');
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
-    await page.click('.lo-card');
+    await page.click('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-skill[data-skill="0"]', { visible: true });
     await page.click('.lo-detail .lo-skill[data-skill="0"]');
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('sp.pref.loadout')));
@@ -210,7 +210,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.waitForSelector('.lo .lo-card', { visible: true, timeout: 15000 });
     await page.type('.lo-search input', '隐现');
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
-    await page.click('.lo-card');
+    await page.click('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-skill[data-skill="0"]', { visible: true });
     // choose S1, close and confirm at once — well inside the sync's debounce
     await page.click('.lo-detail .lo-skill[data-skill="0"]');
@@ -273,7 +273,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.setViewport({ width: 1920, height: 1080 });
     await page.type('.lo-search input', '隐现');
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
-    await page.click('.lo-card');
+    await page.click('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-skill[data-skill="0"]', { visible: true });
     // edit, and the briefing ends before the debounced send (every human ready: the requests stand in for the timer)
     await page.click('.lo-detail .lo-skill[data-skill="0"]');
@@ -297,7 +297,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.waitForSelector('.lo .lo-card', { visible: true, timeout: 15000 });
     await page.type('.lo-search input', '烛煌');
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
-    await page.click('.lo-card');
+    await page.click('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-mod[data-module="none"]', { visible: true });
     // wait for every module tile to settle (image loaded or lettered fallback)
     await page.waitForFunction(() => [...document.querySelectorAll('.lo-mod:not(.lo-mod--none) .lo-mglyph')]
@@ -341,7 +341,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.waitForFunction(() => [...document.querySelectorAll('.lo-card')].every((c) => c.classList.contains('lo-card--t6')));
     await page.tap('.lo-chip--prof[title="狙击"]');
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length >= 1);
-    await page.tap('.lo-card');
+    await page.tap('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-skill', { visible: true });
     assert.notEqual(await page.$eval('.lo-roster', (el) => getComputedStyle(el).display), 'none', 'side by side');
     // every skill option is reachable inside the viewport (the detail body scrolls)
@@ -359,7 +359,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.tap('.lobby-screen [data-testid="loadout-open"]');
     await page.waitForSelector('.lo .lo-card', { visible: true, timeout: 15000 });
     assert.equal(await page.$eval('.lo-detail-wrap', (el) => getComputedStyle(el).display), 'none');
-    await page.tap('.lo-card');
+    await page.tap('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-skill', { visible: true });
     assert.equal(await page.$eval('.lo-roster', (el) => getComputedStyle(el).display), 'none', 'detail covers the roster');
     await page.screenshot({ path: path.join(OUT, 'loadout-small-phone.png') });
@@ -380,7 +380,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.keyboard.press('Backspace');
     await page.type('.lo-search input', name);
     await page.waitForFunction((n) => document.querySelectorAll('.lo-card').length === 1 && document.querySelector('.lo-card .lo-card__name')?.textContent === n, { timeout: 5000 }, name);
-    await page.click('.lo-card');
+    await page.click('.lo-card__pick');
     await page.waitForSelector('.lo-sec--stats .dstat', { visible: true });
   }
 
@@ -443,7 +443,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.waitForSelector('.lo .lo-card', { visible: true, timeout: 15000 });
     await page.type('.lo-search input', '隐现');
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
-    await page.tap('.lo-card');
+    await page.tap('.lo-card__pick');
     await page.waitForSelector('.lo-sec--stats .dstat', { visible: true });
     await page.$eval('.lo-sec--stats', (el) => el.scrollIntoView({ block: 'start' }));
     const m = await page.evaluate(() => {

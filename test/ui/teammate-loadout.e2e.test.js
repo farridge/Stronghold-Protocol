@@ -58,9 +58,9 @@ describe('DESIGN §16 — a teammate\'s unit shows its owner\'s loadout (real se
       await guest.click('.lo-search input');
       await guest.page.keyboard.type('野鬃');
       await guest.page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
-      await guest.click('.lo-card');
-      await guest.click('.lo-detail .lo-skill[data-skill="0"]');
-      await guest.click('.lo-detail .lo-mod[data-module="none"]');
+      await guest.click('.lo-card__pick');
+      await guest.click('.lo-card .lo-quick-skill[data-skill="0"]');
+      await guest.click('.lo-card .lo-quick-module[data-module="none"]');
       await guest.page.waitForFunction(() => /已同步/.test(document.querySelector('.lo-sync')?.textContent || ''), { timeout: 8000 });
       await guest.page.keyboard.press('Escape');
       await guest.page.waitForFunction(() => !document.querySelector('.lo'), { timeout: 3000 });

@@ -141,7 +141,7 @@
 /* ---- roster grid ------------------------------------------------------------------------------------------------------------ */
 .lo-grid {
   flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(max(1.16rem, 64px), 1fr)); grid-auto-rows: max-content;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(2.4rem, 208px)), 1fr)); grid-auto-rows: max-content;
   align-content: start; gap: .1rem; padding: .06rem .08rem .2rem .02rem;
   scrollbar-width: thin; scrollbar-color: var(--line-3) transparent;
 }
@@ -150,7 +150,7 @@
 .lo-card {
   --tc: var(--tier-1);
   position: relative; display: flex; flex-direction: column; align-items: stretch; min-width: 0;
-  padding: 0; font: inherit; color: var(--text-hi); text-align: left; cursor: pointer;
+  padding: max(.08rem, 6px); font: inherit; color: var(--text-hi); text-align: left;
   background: linear-gradient(180deg, rgba(34, 41, 38, .95), rgba(14, 17, 16, .98));
   border: 1px solid var(--line); box-shadow: inset 0 -2px 0 var(--tc);
   transition: border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
@@ -158,9 +158,12 @@
 }
 .lo-card--t1 { --tc: var(--tier-1); } .lo-card--t2 { --tc: var(--tier-2); } .lo-card--t3 { --tc: var(--tier-3); }
 .lo-card--t4 { --tc: var(--tier-4); } .lo-card--t5 { --tc: var(--tier-5); } .lo-card--t6 { --tc: var(--tier-6); }
-.lo-card:hover { border-color: var(--line-3); transform: translateY(-1px); }
+.lo-card:hover { border-color: var(--line-3); }
 .lo-card.is-sel { border-color: var(--mint-400); box-shadow: inset 0 -2px 0 var(--tc), 0 0 0 1px var(--mint-500), 0 0 .16rem rgba(23, 249, 183, .35); }
-.lo-card:focus-visible { outline: 2px solid var(--mint-400); outline-offset: 1px; }
+.lo-card__top { display: grid; grid-template-columns: max(.72rem, 56px) minmax(0, 1fr); gap: max(.04rem, 4px); }
+.lo-card__identity { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.lo-card__pick { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; padding: 0; color: inherit; font: inherit; text-align: left; border: 0; background: none; cursor: pointer; }
+.lo-card button:focus-visible { outline: 2px solid var(--mint-400); outline-offset: 1px; }
 .lo-card__art { position: relative; display: block; aspect-ratio: 1; overflow: hidden; background: #1b201e; }
 .lo-card__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lo-card__art::after { content: ''; position: absolute; inset: 55% 0 0; background: linear-gradient(180deg, transparent, rgba(8, 10, 9, .85)); }
@@ -174,20 +177,30 @@
 .lo-card__sub { position: absolute; right: .03rem; top: .26rem; z-index: 1; padding: 0 .04rem; font-size: max(.11rem, 8px); font-weight: 700; line-height: 1.4; color: var(--ice-900); background: var(--ice); }
 .lo-locknote--standin { color: var(--ice); }
 .lo-card__name {
-  position: absolute; left: .05rem; right: .05rem; top: calc(100% - max(.64rem, 34px)); z-index: 1;
-  font-size: max(.15rem, 10px); font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: max(.14rem, 11px); font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   text-shadow: 0 1px 2px #000;
 }
-.lo-card__kit { display: flex; align-items: center; justify-content: space-between; gap: .04rem; height: max(.3rem, 18px); padding: 0 .04rem; background: rgba(0, 0, 0, .4); }
-.lo-card__sk { display: inline-flex; align-items: center; gap: .04rem; font-size: max(.13rem, 9px); color: var(--text-lo); }
-.lo-card__sk b { font-family: var(--font-num); letter-spacing: .04em; }
-.lo-card__sk.is-alt { color: var(--mint-400); }
-.lo-card__mod {
-  display: inline-grid; place-items: center; min-width: max(.24rem, 15px); height: max(.2rem, 13px); padding: 0 .03rem;
-  font-family: var(--font-num); font-size: max(.13rem, 9px); font-weight: 700; color: var(--text-lo);
-  border: 1px solid var(--line-2); background: rgba(255, 255, 255, .04);
+.lo-card__bonds { display: flex; flex-wrap: wrap; gap: 3px; min-height: 12px; }
+.lo-card__bonds img { width: max(.15rem, 12px); height: max(.15rem, 12px); object-fit: contain; }
+.lo-card__preview { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; padding: 0 2px; color: var(--text-lo); font: inherit; font-size: max(.12rem, 10px); background: none; border: 1px solid var(--line-2); cursor: pointer; }
+.lo-card__preview[aria-pressed="true"] { color: var(--mint-400); border-color: var(--mint-700); }
+.lo-card__preview:disabled { opacity: .4; cursor: default; }
+.lo-quick-skills { display: flex; align-items: flex-start; min-width: 0; }
+.lo-quick-skill { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 44px; padding: 2px 0; font: inherit; font-size: max(.12rem, 10px); color: var(--text-lo); background: transparent; border: 1px solid transparent; cursor: pointer; touch-action: manipulation; }
+.lo-quick-skill.is-on { border-color: var(--mint-700); background: rgba(78, 216, 175, .06); color: var(--text-hi); }
+.lo-quick-skill__icon { position: relative; display: inline-flex; }
+.lo-quick-skill .lo-sicon { width: max(.36rem, 32px); height: max(.36rem, 32px); }
+.lo-quick-skill__slot, .lo-quick-module__type { position: absolute; right: 1px; bottom: 1px; padding: 0 2px; font-size: max(.1rem, 9px); line-height: 1.15; color: var(--text-hi); background: rgba(0, 0, 0, .8); }
+.lo-quick-skill__recovery { padding: 0 3px; color: #0b0d0c; background: #9bd26b; line-height: 1.4; }
+.lo-quick-skill__sp, .lo-quick-skill__duration { white-space: nowrap; line-height: 1.2; }
+/* Every offered module stays present (including none). Future four-module operators scroll this row only. */
+.lo-quick-mods { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.lo-quick-module { position: relative; flex: 0 0 max(.48rem, 44px); display: grid; place-items: center; min-height: max(.48rem, 44px); padding: 2px; border: 1px solid var(--line-2); background: none; color: inherit; cursor: pointer; touch-action: manipulation; }
+.lo-quick-module .lo-mglyph { width: max(.4rem, 36px); height: max(.4rem, 36px); }
+.lo-quick-module.is-on { border-color: var(--mint-400); background: rgba(78, 216, 175, .06); }
+.lo-quick-module.is-on::after, .lo-quick-skill.is-on .lo-quick-skill__icon::after {
+  content: '✓'; position: absolute; right: -2px; top: -3px; width: 12px; height: 12px; border-radius: 50%; text-align: center; font-size: 10px; line-height: 12px; font-weight: 900; color: var(--text-on-mint); background: var(--mint-400); pointer-events: none;
 }
-.lo-card__mod.is-alt { color: var(--text-on-mint); background: var(--gold-2); border-color: var(--gold); }
 
 /* ---- skill icon / module glyph ---------------------------------------------------------------------------------------------- */
 .lo-sicon { position: relative; flex: none; display: inline-grid; place-items: center; width: .72rem; height: .72rem; background: #151a18; border: 1px solid var(--line-2); }
@@ -236,6 +249,11 @@
 .lo-dhead__reset { position: absolute; right: .12rem; top: .12rem; }
 
 .lo-detail__body { flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: .12rem .18rem .2rem; scrollbar-width: thin; scrollbar-color: var(--line-3) transparent; }
+.lo-garrisons { margin-bottom: .18rem; }
+.lo-garrisons .dgarrison__k { font-size: max(.14rem, 11px); }
+.lo-garrisons .dgarrison__type { font-size: max(.12rem, 10px); }
+.lo-garrisons .dgarrison__icon { width: max(.18rem, 14px); height: max(.18rem, 14px); }
+.lo-garrisons .dgarrison__text { font-size: max(.15rem, 11px); }
 .lo-sec { display: flex; flex-direction: column; gap: .08rem; }
 .lo-sec + .lo-sec { margin-top: .18rem; }
 .lo-sec__head { display: flex; align-items: center; gap: .12rem; min-height: max(.36rem, 22px); }
@@ -544,7 +562,6 @@
   .lo-note { display: none; }
   .lo-dhead { grid-template-columns: max(1rem, 48px) minmax(0, 1fr); padding: .1rem .14rem; }
   .lo-dhead__en { display: none; }
-  .lo-grid { grid-template-columns: repeat(auto-fill, minmax(max(1rem, 58px), 1fr)); }
 }
 /* the shared Button / TextField scale with the root (40 px/rem on phones ⇒ 6–7 px text, 14–20 px tall): the overlay's
    own controls (返回, 全部恢复默认, 恢复默认, the search field) keep a readable size and a tappable height (review fix) */
