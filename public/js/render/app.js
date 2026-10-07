@@ -1508,7 +1508,9 @@ export async function createFieldView(host, options = {}) {
   function pushSnapshot(snap) {
     if (destroyed || mode !== 'battle') return false;
     if (battleMeta?.fieldId && snap && snap.fieldId && snap.fieldId !== battleMeta.fieldId) return false;
-    return interp.push(snap, performance.now() / 1000);
+    const accepted = interp.push(snap, performance.now() / 1000);
+    if (accepted) fx.setStones(snap?.stones);
+    return accepted;
   }
 
   function pushEvents(ev) {

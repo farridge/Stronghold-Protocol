@@ -357,6 +357,9 @@ export class FxSystem {
     this.tileGfx = new P.Graphics();
     this.tileGfx.blendMode = P.BLEND_MODES.ADD;
     ctx.layers.groundFx.addChild(this.tileGfx);
+    this.stones = [];
+    this.stoneGfx = new P.Graphics();
+    ctx.layers.groundFx.addChild(this.stoneGfx);
     this.tintSprite = new P.Sprite(P.Texture.WHITE);
     this.tintSprite.alpha = 0;
     this.tintSprite.blendMode = P.BLEND_MODES.ADD;
@@ -2176,6 +2179,7 @@ export class FxSystem {
 
   /** Remove everything (battle reset). */
   clear() {
+    this.stones = []; this.stoneGfx.clear();
     for (const p of this.parts) this._freeParticle(p);
     this.parts.length = 0;
     for (const pr of this.projs) this._releaseProj(pr);
@@ -2220,6 +2224,7 @@ export class FxSystem {
     this._updateZones(dt);
     this._updateLabels(dt);
     this._updateTileFlashes(dt);
+    this._updateStones();
     if (this.tintT > 0) {
       this.tintT = Math.max(0, this.tintT - dt);
       const size = this.ctx.screenSize();
@@ -2238,6 +2243,22 @@ export class FxSystem {
     return { particles: this.parts.length, projectiles: this.projs.length, numbers: this.nums.length, rings: this.rings.length, auras: this.auras.size, locks: this.locks.length, flames: this.flames.length, promotions: this.promotions || 0 };
   }
 
+  /** Snapshot-backed follower effects, drawn under units and never picked as board pieces. */
+  setStones(stones) { this.stones = Array.isArray(stones) ? stones : []; }
+
+  _updateStones() {
+    const gfx = this.stoneGfx;
+    gfx.clear();
+    for (const [owner, x, y, axes] of this.stones) {
+      const p = this._proj(x, y, this._groundZ(x, y) + 0.02);
+      const radius = Math.max(3, p.s * 0.16);
+      gfx.lineStyle(1.5, axes ? 0xe5c892 : 0x777777, 0.95);
+      gfx.beginFill(owner % 2 ? 0x252529 : 0xe7e1d5, 0.95);
+      gfx.drawEllipse(p.x, p.y, radius, radius * 0.65); gfx.endFill();
+      if (axes) { gfx.lineStyle(1, 0xe5c892, 0.55); gfx.drawEllipse(p.x, p.y, radius * 1.5, radius); }
+    }
+  }
+
   destroy() {
     this.clear();
     this.addPc.destroy({ children: true });
@@ -2248,6 +2269,7 @@ export class FxSystem {
     this.projFree.length = 0;
     this.freeAdd.length = 0; this.freeNorm.length = 0;
     this.beams.destroy();
+    this.stoneGfx.destroy();
     this.vignette.destroy();
     this.tileGfx.destroy();
     this.tintSprite.destroy();

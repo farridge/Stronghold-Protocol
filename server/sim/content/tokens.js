@@ -83,6 +83,7 @@ import { hasHp } from '../damage.js';
 import { genericKit } from './generic.js';
 import { normDir, localOrder } from '../dir.js';
 import { SKILL_SUMMON_START_DEPLOY } from '../../../shared/constants.js';
+import { WANG_STONE, wangStoneKit } from './kits/wang.js';
 
 const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : d));
 const GRID_3X3 = Object.freeze([[1, -1], [1, 0], [1, 1], [0, -1], [0, 0], [0, 1], [-1, -1], [-1, 0], [-1, 1]]);
@@ -1352,6 +1353,7 @@ export function spawnMapChar(battle, playerId, tokenId, { alias = null } = {}) {
 // registry
 
 const RAW_KITS = {
+  [WANG_STONE]: wangStoneKit,
   [TOKEN_IDS.healDrone]: healDrone,
   [TOKEN_IDS.curseDoll]: curseDoll,
   [TOKEN_IDS.obelisk]: obelisk,

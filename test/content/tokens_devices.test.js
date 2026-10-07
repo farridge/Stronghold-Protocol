@@ -899,7 +899,8 @@ test('every token variant: a spawn with that owner takes the owner-level stats (
       const o = h.unit(ownerId);
       const t = h.b.spawnToken(o, id, 9, 8);
       assert.ok(t, `${id} for ${ownerId}`);
-      assert.equal(t.base.atk, v.stats.atk, `${id}/${ownerId} ATK`);
+      // Wang's stones snapshot the summoner's ATK on deployment; their table ATK is a placeholder.
+      assert.equal(t.base.atk, id === 'token_10064_wang_stone1' ? o.s.atk : v.stats.atk, `${id}/${ownerId} ATK`);
       assert.equal(t.base.def, v.stats.def, `${id}/${ownerId} DEF`);
       assert.equal(t.base.respawnTime, v.stats.respawnTime, `${id}/${ownerId} respawn`);
       assert.equal(t.s.maxHp, v.stats.maxHp, `${id}/${ownerId} HP`);

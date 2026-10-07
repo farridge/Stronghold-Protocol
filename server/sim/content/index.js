@@ -35,7 +35,7 @@ async function safeImport(path) {
 
 const TIERS = await Promise.all([
   ...[1, 2, 3, 4, 5, 6].map((t) => safeImport(`./kits/tier${t}.js`)),
-  safeImport('./kits/chen3.js'),
+  safeImport('./kits/chen3.js'), safeImport('./kits/wang.js'),
 ]);
 const DOMAIN_NAMES = ['tokens', 'devices', 'enemies', 'bosses', 'bonds', 'garrisons', 'items', 'bands', 'choices'];
 const DOMAINS = await Promise.all(DOMAIN_NAMES.map((n) => safeImport(`./${n}.js`)));

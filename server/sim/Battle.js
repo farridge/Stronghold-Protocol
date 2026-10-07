@@ -2363,6 +2363,10 @@ export class Battle {
       if (v) (elem || (elem = [])).push([u.id, v[0], v[1], v[2], v[3]]);
     }
     if (elem) snap.elem = elem;
+    // Non-unit follower stones must survive watch/reconnect without reserving a deployment tile.
+    const stoneOwners = this.allyUnits.filter((u) => u.mem.wang);
+    if (stoneOwners.length) snap.stones = stoneOwners.flatMap((u) => u.mem.wang.followers.map((s) =>
+      [u.id, s.c, s.r, (s.axes.has('horizontal') ? 1 : 0) | (s.axes.has('vertical') ? 2 : 0)]));
     return snap;
   }
 
