@@ -74,9 +74,10 @@ function parseArgs(argv) {
   return opts;
 }
 
+const DIRECT = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 let OPTS;
 try {
-  OPTS = parseArgs(process.argv.slice(2));
+  OPTS = parseArgs(DIRECT ? process.argv.slice(2) : []);
 } catch (e) {
   console.error(`build-data: ${e.message}`);
   process.exit(2);
@@ -751,7 +752,7 @@ function hasE2Art(ctx, charId, kind) {
  * ({id, modulePhase, moduleTokenParts} per non-default module + 'none') for the token variants.
  * @returns {{ chess: object, tokenOwners: Map<string, Array<{chessId:string, charId:string, phase:number, level:number, skillIndex:number, skillLevel:number, count:number|null, golden:boolean, modulePhase:any, skillAlts:object[], moduleAlts:object[]}>> }}
  */
-function buildChess(ctx) {
+export function buildChess(ctx) {
   const { act, charTable, uniequip, battleEquip } = ctx;
   const out = {};
   const tokenOwners = new Map();
@@ -1093,7 +1094,7 @@ const TOKEN_ABNORMAL = Object.freeze({
  * Build data/tokens.json: summons of chess (per-owner variants), bond summons (炎佑) and band map
  * characters (band_amedic 预备干员-医疗 / Touch). `abnormal` = TOKEN_ABNORMAL (PRTS).
  */
-function buildTokens(ctx, chess, tokenOwners, enemies) {
+export function buildTokens(ctx, chess, tokenOwners, enemies) {
   const { charTable, ac } = ctx;
   const out = {};
   const displayType = (id) => ac.shopStateTokenDict?.[id]?.tokenDisplayType || null;
@@ -3136,7 +3137,7 @@ function validateAll(f) {
     for (const g of c.garrisonIds) if (!garrisons[g]) err(`chess ${c.chessId}: garrison ${g} missing`);
     for (const t of c.tokens) if (!tokens[t]) err(`chess ${c.chessId}: token ${t} missing`);
     for (const t of c.talents || []) if (t.tokenKey && !c.tokens.includes(t.tokenKey)) err(`chess ${c.chessId}: talent token ${t.tokenKey} not in tokens`);
-    if (c.isDiy) continue;
+    if (c.isDiy && !c.diyAvailable) continue;
     if (!c.stats) err(`chess ${c.chessId}: no stats`);
     if (!c.skill) err(`chess ${c.chessId}: no resolvable skill`);
     if (!Array.isArray(c.rangeGrid)) err(`chess ${c.chessId}: no range grid`);
@@ -3241,6 +3242,13 @@ async function main() {
   const bands = buildBands(ctx, effects);
   const enemies = buildEnemies(ctx);
   const tokens = buildTokens(ctx, chess, tokenOwners, enemies);
+  if (!OPTS.noResearch) {
+    const { buildDiy } = await import('./build-diy.mjs');
+    const diy = await buildDiy({ out: OPTS.out, offline: OPTS.offline, bondsInput: bonds, write: false });
+    Object.assign(chess, diy.chess);
+    Object.assign(tokens, diy.tokens);
+    Object.assign(bonds, diy.bonds);
+  }
   const waves = buildWaves(ctx, enemies);
   const stages = buildStages(ctx, ctx.act.modeDataDict);
   const factions = buildFactions(ctx, enemies);
@@ -3302,7 +3310,7 @@ async function main() {
   }
 }
 
-main().catch((e) => {
+if (DIRECT) main().catch((e) => {
   console.error('build-data failed:', e && e.stack ? e.stack : e);
   process.exitCode = 1;
 });

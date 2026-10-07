@@ -398,3 +398,6 @@
 .lo-io__text:focus { border-color: var(--mint-700); }
 .lo-io__text::placeholder { color: var(--text-lo); }
 .lo-io__file { display: none; }
+.lo-diy { padding: 10px 14px; border-bottom: 1px solid #6665; display: grid; gap: 8px; }
+.lo-diy__row { display: grid; grid-template-columns: 3em 1fr 1fr; align-items: center; gap: 8px; }
+.lo-diy select { min-width: 0; width: 100%; padding: 8px 4px; color: inherit; background: #20252d; border: 1px solid #737d8f; border-radius: 4px; }

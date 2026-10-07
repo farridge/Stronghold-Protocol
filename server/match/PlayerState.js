@@ -71,6 +71,8 @@
 //     normal chess → moduleId null, elite → uniEquipId | 'none'); m.private exposes `loadout`.
 
 import { ERR, GEO, PHASE, layerGainRoom } from '../../shared/constants.js';
+import { PlayerPool } from './pool.js';
+import { checkDiySelection } from '../../shared/diy.js';
 import { checkLoadout, resolveLoadout } from '../../shared/protocol.js';
 import { FIELD, tileKey, parseKey, inField, canPlace, placeClass, boardOrder, freeSlot, pieceDir, parseDir, mergeTile, ownerRangeKeys } from './board.js';
 import { attackRangeGrid, loadoutRecord, resolveRecordLoadout } from '../../shared/loadoutRecord.js';
@@ -111,6 +113,9 @@ export class PlayerState {
     this.lastEmoteAt = -Infinity;
     /** operator loadout (DESIGN §16): frozen { [baseChessId]: { skill, module } }, {} = every chess on its defaults */
     this.loadout = Object.freeze({});
+    this.diy = checkDiySelection().diy;
+    this._pool = null;
+    if (!this.isBot && seat.diy) this.setDiy(seat.diy);
     if (!this.isBot && seat.loadout) this.setLoadout(seat.loadout);
     this.shop = { level: 1, upgradePrice: this.gd.upgradeBase(1) ?? 0, slots: [], frozen: false, freeRefreshes: 0 };
     /** reward offers queue (merge rewards, special refreshes): { tier, source, label, slots: [{ kind, id, price, sold }] } */
@@ -208,6 +213,20 @@ export class PlayerState {
    * @param {any} loadout
    * @returns {boolean}
    */
+  get pool() {
+    if (!Object.values(this.diy).some((slots) => slots.some(Boolean))) return this.m.pool;
+    if (!this._pool) this._pool = new PlayerPool(this.gd, this.m.pool, this.diy);
+    return this._pool;
+  }
+
+  setDiy(value) {
+    const result = checkDiySelection(value);
+    if (!result.ok) return false;
+    this.diy = result.diy;
+    this._pool = null;
+    return true;
+  }
+
   setLoadout(loadout) {
     if (this.isBot) return false;
     const entries = {};
@@ -394,7 +413,7 @@ export class PlayerState {
   /** Return a piece's pool copies (and its equipped items are handled by the caller). */
   returnCopies(piece) {
     if (piece && piece.kind === 'chess' && piece.poolCopies > 0) {
-      this.m.pool.give(this.gd.baseIdOf(piece.id), piece.poolCopies);
+      this.pool.give(this.gd.baseIdOf(piece.id), piece.poolCopies);
       piece.poolCopies = 0;
     }
   }
@@ -481,10 +500,11 @@ export class PlayerState {
    */
   acquireChess(chessId, { source = 'grant', toTemp = false, fromPool = true, silent = false } = {}) {
     const rec = this.gd.chess(chessId);
-    if (!rec) return null;
+    if (!rec || (rec.isDiy && (!rec.diyAvailable || !this.pool.has(rec.baseId)))) return null;
     const base = this.gd.baseIdOf(chessId);
     const need = rec.isGolden ? this.gd.goldenCopies : 1;
-    const taken = fromPool ? this.m.pool.take(base, need) : 0;
+    if (rec.isDiy && fromPool && this.pool.left(base) < need) return null;
+    const taken = fromPool ? this.pool.take(base, need) : 0;
     const piece = this.newPiece('chess', chessId, { poolCopies: taken });
     this.round.gainedChess++;
     let owned = piece;
@@ -565,7 +585,7 @@ export class PlayerState {
     // equipment, which would be lost in temp — a summon stack removed there comes back at the next round start)
     if (where === 'board') this.grantTokensFor(elite);
     if (!where) {
-      this.m.pool.give(baseId, copies);
+      this.pool.give(baseId, copies);
       this.m.toast(this, 'warn', '整备区已满，晋升的精锐干员无法放入');
       this.m.log.warn?.(`[match ${this.m.roomCode}] ${this.playerId}: merge result dropped (hand+temp full)`);
       this.recompute();
@@ -586,7 +606,8 @@ export class PlayerState {
     if (!goldenId) return false;
     const base = this.gd.baseIdOf(piece.id);
     const extra = Math.max(0, this.gd.goldenCopies - (piece.poolCopies || 0));
-    piece.poolCopies = (piece.poolCopies || 0) + this.m.pool.take(base, extra);
+    if (this.gd.chess(piece.id)?.isDiy && this.pool.left(base) < extra) return false;
+    piece.poolCopies = (piece.poolCopies || 0) + this.pool.take(base, extra);
     piece.id = goldenId;
     this.recompute();
     return true;
@@ -654,13 +675,16 @@ export class PlayerState {
     const ro = this.gd.rewardOffer();
     const t = Number.isInteger(tier) ? tier : Math.min(this.shop.level + ro.tierOffset, ro.maxTier);
     // an offer never shows one operator twice, whoever built the list (user playtest #6 item 19)
-    let list = Array.isArray(ids) ? [...new Set(ids)].filter((id) => this.gd.chess(id)) : null;
+    let list = Array.isArray(ids) ? [...new Set(ids)].filter((id) => {
+      const rec = this.gd.chess(id);
+      return rec && (!rec.isDiy || this.pool.has(this.gd.baseIdOf(id)));
+    }) : null;
     if (!list) {
       list = [];
       const fresh = (id) => !list.includes(id);
       for (let i = 0; i < ro.count; i++) {
         let id = null;
-        for (let tt = t; tt >= 1 && !id; tt--) id = this.m.pool.roll(this.m.rngShop, { tier: tt, filter: fresh });
+        for (let tt = t; tt >= 1 && !id; tt--) id = this.pool.roll(this.m.rngShop, { tier: tt, filter: fresh });
         if (id) list.push(id);
       }
     }
@@ -836,12 +860,12 @@ export class PlayerState {
   }
 
   _rollChessSlot() {
-    const id = this.m.pool.roll(this.m.rngShop, { maxTier: this.shop.level });
+    const id = this.pool.roll(this.m.rngShop, { maxTier: this.shop.level });
     return id ? { kind: 'chess', id, basePrice: this.gd.chessPrice(id), frozen: false, sold: false } : null;
   }
 
   _rollItemSlot() {
-    const id = this.m.pool.rollItem(this.m.rngShop, this.shop.level);
+    const id = this.pool.rollItem(this.m.rngShop, this.shop.level);
     return id ? { kind: 'item', id, basePrice: this.gd.itemPrice(id), frozen: false, sold: false } : null;
   }
 
@@ -899,8 +923,9 @@ export class PlayerState {
       const rec = this.gd.chess(slot.id);
       if (!rec) return fail(ERR.BAD_TARGET);
       const base = this.gd.baseIdOf(slot.id);
+      if (rec.isDiy && !this.pool.has(base)) return fail(ERR.BAD_TARGET);
       const need = rec.isGolden ? this.gd.goldenCopies : 1;
-      if (this.m.pool.has(base) && this.m.pool.left(base) < need) return fail(ERR.SOLD_OUT);
+      if (this.pool.has(base) && this.pool.left(base) < need) return fail(ERR.SOLD_OUT);
       if (handFull && !this.completesChessMerge(slot.id)) return fail(ERR.HAND_FULL);
       this.spend(price);
       slot.sold = true;
@@ -1290,6 +1315,7 @@ export class PlayerState {
     if (!rec || rec.itemType !== 'EQUIP') return fail(ERR.BAD_TARGET, 'not equipment');
     const tloc = this.find(targetUid);
     if (!tloc || tloc.piece.kind !== 'chess' || tloc.area === 'equipped') return fail(ERR.BAD_TARGET);
+    if (this.gd.chess(tloc.piece.id)?.isDiy && ['eff_acarm109', 'eff_acgarm109'].includes(rec.effectId)) return fail(ERR.BAD_TARGET, '信标无法装备给外援');
     const item = iloc.piece;
     const target = tloc.piece;
     if (replaceUid != null && !(Number.isInteger(replaceUid) && (target.items || []).some((x) => x.uid === replaceUid))) return fail(ERR.BAD_TARGET, 'replace: not equipped on the target');
@@ -1405,7 +1431,7 @@ export class PlayerState {
       if (!rec) return fail(ERR.BAD_TARGET);
       const base = this.gd.baseIdOf(slot.id);
       const need = rec.isGolden ? this.gd.goldenCopies : 1;
-      if (this.m.pool.has(base) && this.m.pool.left(base) < need) return fail(ERR.SOLD_OUT);
+      if (this.pool.has(base) && this.pool.left(base) < need) return fail(ERR.SOLD_OUT);
       if (handFull && !this.completesChessMerge(slot.id)) return fail(ERR.HAND_FULL);
     }
     const price = Number.isFinite(slot.price) && slot.price > 0 ? Math.trunc(slot.price) : 0;
@@ -1662,6 +1688,7 @@ export class PlayerState {
       nextEnemies: this.m.nextEnemiesFor(this),
       // DESIGN §16: the effective operator loadout ({ [baseChessId]: { skill, module } }; chess not listed use defaults)
       loadout: this.loadout,
+      diy: this.diy,
       stats: {
         dmgDealt: Math.round(this.stats.dmgDealt), kills: this.stats.kills, leaks: this.stats.leaks, gold: this.stats.gold,
         refreshes: this.stats.refreshes, merges: this.stats.merges,

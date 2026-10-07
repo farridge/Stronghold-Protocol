@@ -246,8 +246,8 @@ async function main() {
   const audio = indexAudio(audioData);
   // The game data built by tools/build-data.mjs (when present) may reference more
   // spawnable enemies/tokens than research lists (e.g. 机变 enemy swaps): cover them too.
-  const [dataEnemies, dataTokens, dataBosses] = await Promise.all(
-    ['data/enemies.json', 'data/tokens.json', 'data/bosses.json'].map((f) => readJson(f).catch(() => null)));
+  const [dataEnemies, dataTokens, dataBosses, dataChess] = await Promise.all(
+    ['data/enemies.json', 'data/tokens.json', 'data/bosses.json', 'data/chess.json'].map((f) => readJson(f).catch(() => null)));
   const extraHandbook = {};
   for (const b of Object.values(dataBosses || {})) if (b?.enemyKey && typeof b.handbookId === 'string') extraHandbook[b.enemyKey] = b.handbookId;
   const localEnemySpines = await syncLocalEnemySpines(opts);
@@ -257,7 +257,7 @@ async function main() {
     voiceSlots: opts.voiceAll ? null : undefined,
     extraEnemyIds: Object.keys(dataEnemies || {}),
     extraTokenIds: Object.keys(dataTokens || {}),
-    extraHandbook,
+    extraHandbook, dataChess,
     localEnemySpines,
   });
   const leaves = collectLeaves(plan.template);

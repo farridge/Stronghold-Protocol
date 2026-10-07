@@ -272,6 +272,7 @@ export function collectEnemyIds({ assets07, enemies05, maps05, ops03 }) {
  *   (干员报到 / 编入队伍 / 任命队长) are never requested by the client and cost 360 files / 19.3 MB of downloads.
  * @param {string[]} [p.extraEnemyIds] more enemy ids that can spawn (e.g. keys of data/enemies.json)
  * @param {string[]} [p.extraTokenIds] more token ids (e.g. token_* keys of data/tokens.json)
+ * @param {Record<string,any>} [p.dataChess] generated chess records, including available external operators
  * @param {Record<string,string>} [p.extraHandbook] enemyId → handbook/model id (e.g. from data/bosses.json)
  * @param {Record<string, import('./spine.mjs').LocalSpineMeta>} [p.localEnemySpines] metadata of the enemy models the
  *   local client has (the committed tools/assets/local-enemy-spines.json, never the disk): each planned enemy listed
@@ -280,7 +281,28 @@ export function collectEnemyIds({ assets07, enemies05, maps05, ops03 }) {
  */
 export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsData, charword = null, voiceLang = 'cn',
   voiceSlots = VOICE_BATTLE_SLOTS,
-  extraEnemyIds = [], extraTokenIds = [], extraHandbook = {}, localEnemySpines = {} }) {
+  extraEnemyIds = [], extraTokenIds = [], extraHandbook = {}, localEnemySpines = {}, dataChess = {} }) {
+  // Historical external data follows the same community dump paths as research operators.
+  const operators = { ...(assets07?.operators || {}) };
+  const external = Object.values(dataChess || {}).filter((c) => c.diyAvailable && !c.isGolden);
+  for (const c of external) if (!operators[c.charId]) {
+    const id = c.charId;
+    const spine = (facing) => Object.fromEntries(['skel', 'atlas', 'png'].map((ext) =>
+      [ext, `${RAW.fexli}spine/${id}/${id}/${facing}/${id}.${ext}`]));
+    operators[id] = {
+      avatar: { e0e1: { url: `${RAW.yuanyan}avatar/${id}.png` }, e2: { url: `${RAW.yuanyan}avatar/${id}_2.png` } },
+      portrait: { e0e1: { url: `${RAW.yuanyan}portrait/${id}_1.png` }, e2: { url: `${RAW.yuanyan}portrait/${id}_2.png` } },
+      battleSpine: { front: spine('Front'), back: spine('Back') },
+      skills: c.skills.map((s) => ({ ...s, icon: { url: `${RAW.yuanyan}skill/skill_icon_${s.iconId || s.skillId}.png` } })),
+    };
+  }
+  assets07 = { ...assets07, operators };
+  const tokensUsedByPool = { ...(ops03?.tokensUsedByPool || {}) };
+  for (const c of external) for (const id of c.tokens || []) {
+    const used = tokensUsedByPool[id]?.usedByChess || [];
+    tokensUsedByPool[id] = { usedByChess: [...new Set([...used, c.chessId])] };
+  }
+  ops03 = { ...ops03, chess: [...(ops03?.chess || []), ...external.map((c) => ({ ...c, defaultSkillIndex: c.skill.index }))], tokensUsedByPool };
   const notes = [];
   /** @type {Map<string, any>} */
   const models = new Map();

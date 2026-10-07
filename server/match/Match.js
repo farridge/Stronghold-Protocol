@@ -130,6 +130,7 @@
 //     human is left at all the match ends ('abandoned'); when nobody alive is left it ends as 'eliminated'.
 
 import { C2S, unitStatsEntry } from '../../shared/protocol.js';
+import { checkDiySelection } from '../../shared/diy.js';
 import { PHASE, ERR, EMOTES, EMOTE_COOLDOWN_MS, GEO, modeIdFor, layerGainRoom } from '../../shared/constants.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
@@ -435,13 +436,16 @@ export class Match {
    * @param {Record<string, { skill: number, module: string|null }> | null} loadout
    * @returns {{ ok: true } | { error: string, detail?: string }}
    */
-  setLoadout(playerId, loadout) {
+  setLoadout(playerId, loadout, diy = undefined) {
     const ps = this.players.get(playerId);
     if (!ps || ps.isBot || ps.left) return fail(ERR.NOT_IN_ROOM);
     if (this.disposed || this.ended || this.phase !== PHASE.INFO_CHECK) return fail(ERR.WRONG_PHASE, 'loadout locked for this match');
     let res = OK;
     this.guard(() => {
+      const checked = checkDiySelection(diy ?? ps.diy);
+      if (!checked.ok) { res = checked; return; }
       if (!ps.setLoadout(loadout)) { res = fail(ERR.BAD_TARGET, 'loadout does not match the game data'); return; }
+      ps.setDiy(checked.diy);
       this.markPrivate(ps);
     });
     return res;
@@ -1685,7 +1689,8 @@ export class Match {
    * pool filtered by `tier` / `minTier` / `maxTier` (number or 'shopLevel') / `bond`; `golden: true` yields the elite id.
    * @returns {{ kind: 'item'|'chess', id: string, golden?: boolean } | null}
    */
-  rollPool(poolId, { shopLevel = 6 } = {}) {
+  rollPool(poolId, { shopLevel = 6, player = null } = {}) {
+    const pool = player?.pool || this.pool;
     const pools = this.gd.choices.pools && typeof this.gd.choices.pools === 'object' ? this.gd.choices.pools : {};
     const p = typeof poolId === 'string' && Object.hasOwn(pools, poolId) ? pools[poolId] : null;
     if (!p || typeof p !== 'object') return null;
@@ -1697,9 +1702,12 @@ export class Match {
     if (p.kind !== 'chess') return null;
     const rng = this.rngMeta;
     const free = (id) => {
+      if (this.gd.chess(id)?.isDiy && !pool.has(this.gd.baseIdOf(id))) return false;
       if (typeof id !== 'string' || !this.gd.chess(id)) return false;
       const base = this.gd.baseIdOf(id);
-      return !this.pool.has(base) || this.pool.left(base) > 0;
+      const rec = this.gd.chess(id);
+      const need = rec.isDiy && (p.golden || rec.isGolden) ? this.gd.goldenCopies : 1;
+      return !pool.has(base) || pool.left(base) >= need;
     };
     let id = null;
     if (Array.isArray(p.weighted) && p.weighted.length) {
@@ -1712,10 +1720,11 @@ export class Match {
       const maxTier = p.maxTier === 'shopLevel' ? lvl : Number.isInteger(p.maxTier) ? p.maxTier : 6;
       const minTier = Number.isInteger(p.minTier) ? p.minTier : 1;
       const bond = typeof p.bond === 'string' ? p.bond : null;
-      id = this.pool.roll(rng, {
+      id = pool.roll(rng, {
         tier: Number.isInteger(p.tier) ? p.tier : null,
         maxTier,
-        filter: (cid, e) => e.tier >= minTier && (!bond || (Array.isArray(this.gd.chess(cid)?.bonds) && this.gd.chess(cid).bonds.includes(bond))),
+        filter: (cid, e) => e.tier >= minTier && (!p.golden || !this.gd.chess(cid)?.isDiy || e.left >= this.gd.goldenCopies)
+          && (!bond || (Array.isArray(this.gd.chess(cid)?.bonds) && this.gd.chess(cid).bonds.includes(bond))),
       });
     }
     if (!id) return null;

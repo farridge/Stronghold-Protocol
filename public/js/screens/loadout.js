@@ -27,7 +27,8 @@ import {
   MODULE_NONE, PROF_ORDER, PROF_NAME, rosterOf, filterRoster, recordsOf, chessOptions, effectiveChoice, setChoice, resetChoice,
   changedCount, skillLabel, moduleBadge, attrRows, skillTags, serializeExport, parseImport, LOADOUT_IMPORT_MAX_BYTES,
 } from '../ui/loadoutModel.js';
-import { loadoutStore, openLoadout, closeLoadout, setEntries, applyLoadoutEntries } from '../ui/loadoutSync.js';
+import { loadoutStore, openLoadout, closeLoadout, setEntries, setDiy, applyLoadoutEntries } from '../ui/loadoutSync.js';
+import { DIY_NAMES } from '../../../shared/diy.js';
 import { copyText } from '../ui/clipboard.js';
 import { toast } from '../ui/toasts.js';
 
@@ -375,6 +376,21 @@ const SYNC_TEXT = {
 };
 
 /** The overlay screen. */
+function DiySlots({ diy, getChess, onPick }) {
+  return html`<div class="lo-diy" aria-label="外援选择"><b>外援干员</b><span class="t-dim">每名干员只能选择一次</span>
+    ${['5', '6'].map((tier) => html`<div class="lo-diy__row"><span>${tier === '5' ? '五阶' : '六阶'}</span>
+      ${[0, 1].map((slot) => html`<select aria-label=${tier + '阶外援' + (slot + 1)} value=${diy?.[tier]?.[slot] || ''}
+        onChange=${(e) => { const next = { '5': [...diy['5']], '6': [...diy['6']] }; next[tier][slot] = e.currentTarget.value || null;
+          if (!setDiy(next)) e.currentTarget.value = diy[tier][slot] || '';
+          else if (next[tier][slot]) onPick(next[tier][slot]); }}>
+        <option value="">不选择外援</option>
+        ${DIY_NAMES.map((name) => { const id = `chess_diy_${tier}_${name}_a`;
+          return html`<option value=${id}>${getChess(id)?.name || name}</option>`; })}
+      </select>`)}
+    </div>`)}
+  </div>`;
+}
+
 function LoadoutScreen({ st }) {
   const ready = useData('chess', 'bonds', 'assets', 'local');
   const phase = useStore((s) => s.match?.public?.phase || null);
@@ -385,7 +401,7 @@ function LoadoutScreen({ st }) {
   const m = data.get('assets');
   const getChess = (id) => data.lookup('chess', id);
   const getBond = (id) => data.lookup('bonds', id);
-  const roster = useMemo(() => rosterOf(data.list('chess')), [ready]);
+  const roster = useMemo(() => [...rosterOf(data.list('chess')), ...Object.values(st.diy || {}).flat().filter(Boolean).map(getChess).filter(Boolean)], [ready, st.diy]);
   const bonds = useMemo(() => {
     const used = new Set(roster.flatMap((c) => c.bonds || []));
     return (data.list('bonds') || []).filter((b) => b && used.has(b.bondId))
@@ -412,7 +428,7 @@ function LoadoutScreen({ st }) {
 
   // 导出 / 导入 the loadout as the versioned payload (a downloaded file, the clipboard, or the textarea)
   const ioText = io?.text ?? '';
-  const openExport = () => setIo({ mode: 'export', text: serializeExport(loadoutStore.get().entries) });
+  const openExport = () => setIo({ mode: 'export', text: serializeExport(loadoutStore.get().entries, { diy: st.diy }) });
   const openImport = () => setIo({ mode: 'import', text: '' });
   const ioCopy = async () => {
     const ok = await copyText(ioText);
@@ -433,9 +449,9 @@ function LoadoutScreen({ st }) {
     if (!ready) { toast('干员数据仍在载入，请稍候再导入', 'warn'); return; }
     const res = parseImport(ioText);
     if (!res.ok) { toast(`导入失败：${res.error}`, 'error'); return; }
-    const { applied, dropped } = applyLoadoutEntries(res.entries, getChess);
+    const { applied, dropped } = applyLoadoutEntries(res.entries, getChess, res.diy);
     // nothing survived sanitising (unknown chess, or every choice already the default): keep the current loadout
-    if (!applied) { toast('导入失败：这份数据在当前版本没有可用的调配，未做任何改动', 'error'); return; }
+    if (!applied && !res.diy) { toast('导入失败：这份数据在当前版本没有可用的调配，未做任何改动', 'error'); return; }
     setIo(null);
     toast(dropped
       ? `已导入 ${applied} 名干员（另有 ${dropped} 项未导入）`
@@ -451,7 +467,8 @@ function LoadoutScreen({ st }) {
       if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeLoadout(); return; }
       if (typing) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-        const ids = filterRoster(rosterOf(data.list('chess')), loadoutStore.get().filters, loadoutStore.get().entries, getChess, getBond).map((c) => c.chessId);
+        const selected = Object.values(loadoutStore.get().diy || {}).flat().filter(Boolean).map(getChess).filter(Boolean);
+        const ids = filterRoster([...rosterOf(data.list('chess')), ...selected], loadoutStore.get().filters, loadoutStore.get().entries, getChess, getBond).map((c) => c.chessId);
         if (!ids.length) return;
         const cur = Math.max(0, ids.indexOf(loadoutStore.get().sel));
         const next = ids[(cur + (e.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length];
@@ -489,7 +506,7 @@ function LoadoutScreen({ st }) {
         ${inMatch && hasDeadline(infoDeadline) ? html`<${Countdown} deadline=${infoDeadline} size="sm" gauge=${false} label="调配截止" class="lo-deadline" />` : null}
         ${syncText ? html`<span class=${cx('lo-sync', syncCls)} role="status">${syncText}</span>` : null}
         <span class="lo-count">已调整 <b class="num">${nChanged}</b><span class="num t-dim">/${roster.length}</span></span>
-        <${Button} variant="ghost" size="sm" data-testid="loadout-export" disabled=${!nChanged} onClick=${openExport} title="导出当前调配（可复制或下载）">导出<//>
+        <${Button} variant="ghost" size="sm" data-testid="loadout-export" disabled=${!nChanged && !Object.values(st.diy || {}).flat().some(Boolean)} onClick=${openExport} title="导出当前调配（可复制或下载）">导出<//>
         <${Button} variant="ghost" size="sm" data-testid="loadout-import" disabled=${!ready} onClick=${openImport} title="导入调配（粘贴或选择文件）">导入<//>
         <${Button} variant="secondary" size="sm" icon="refresh" disabled=${!nChanged} onClick=${resetAll}>全部恢复默认<//>
       </div>
@@ -497,6 +514,7 @@ function LoadoutScreen({ st }) {
     <p class=${cx('lo-note', locked && 'is-locked')}><${Icon} name="info" />${locked ? '本局的调配已锁定（确认本局信息后无法修改），修改将在下一局生效' : fromText}</p>
     ${!ready ? html`<div class="lo-loading"><${Spinner} size="sm" />正在载入干员数据（打开页面后仅载入一次）…</div>` : html`<main class=${cx('lo-body', narrowDetail && 'is-detail')}>
       <section class="lo-roster">
+        <${DiySlots} diy=${st.diy} getChess=${getChess} onPick=${pick} />
         <${Filters} m=${m} filters=${st.filters} bonds=${bonds} onFilters=${(filters) => loadoutStore.set({ filters })} />
         <div class="lo-grid" role="listbox" aria-label="干员列表" ref=${gridRef}>
           ${list.length ? list.map((c) => html`<${RosterCard} key=${c.chessId} m=${m} chess=${c} golden=${c.goldenId ? getChess(c.goldenId) : null}

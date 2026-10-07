@@ -90,7 +90,8 @@ export function collectViolations(m, { limit = 25 } = {}) {
         const maxCopies = rec.isGolden ? gd.goldenCopies : 1;
         if (!Number.isInteger(p.poolCopies) || p.poolCopies < 0 || p.poolCopies > maxCopies) fail(`${id}: ${p.id} holds ${p.poolCopies} copies`);
         const base = gd.baseIdOf(p.id);
-        held.set(base, (held.get(base) || 0) + (p.poolCopies || 0));
+        const poolKey = rec.isDiy ? `${id}:${base}` : base;
+        held.set(poolKey, (held.get(poolKey) || 0) + (p.poolCopies || 0));
       } else if (p.kind === 'item') {
         if (!gd.item(p.id)) fail(`${id}: unknown item ${p.id}`);
         countItem(p);
@@ -168,7 +169,13 @@ export function collectViolations(m, { limit = 25 } = {}) {
     const h = held.get(base) || 0;
     if (e.left + h !== e.cap) fail(`pool ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
   }
-  for (const [base, n] of held) if (!m.pool.has(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
+  const externalKeys = new Set();
+  for (const ps of m.players.values()) for (const [base, e] of ps.pool.privateEntries || []) {
+    const key = `${ps.playerId}:${base}`;
+    externalKeys.add(key);
+    if (!(e.left >= 0 && e.left <= e.cap) || e.left + (held.get(key) || 0) !== e.cap) fail(`external pool ${key}: invalid copy accounting`);
+  }
+  for (const [base, n] of held) if (!m.pool.has(base) && !externalKeys.has(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
 
   // combat fields
   if (m.phase === PHASE.COMBAT) {

@@ -12,6 +12,7 @@
 // for the screen's status line.
 
 import { createStore, loadPref, savePref } from '../store.js';
+import { checkDiySelection } from '../../../shared/diy.js';
 import { data } from '../data.js';
 import { LOADOUT_PREF, parseStored, toStored, sanitizeEntries } from './loadoutModel.js';
 import { toast } from './toasts.js';
@@ -26,6 +27,7 @@ function readStored() {
 /** Loadout + screen state (separate from the app store: it must survive room / match resets). */
 export const loadoutStore = createStore({
   entries: readStored(),
+  diy: checkDiySelection(loadPref(LOADOUT_PREF, null)?.diy).diy || checkDiySelection().diy,
   open: false,
   from: null,          // 'lobby' | 'room' | 'briefing'
   sel: null,           // selected base chess id
@@ -36,24 +38,38 @@ export const loadoutStore = createStore({
 /** Replace the stored entries (persisted at once; the sync picks the change up). */
 export function setEntries(entries) {
   const next = entries && typeof entries === 'object' ? entries : {};
-  savePref(LOADOUT_PREF, toStored(next));
+  savePref(LOADOUT_PREF, toStored(next, loadoutStore.get().diy));
   loadoutStore.set({ entries: next });
+}
+
+export function setDiy(value) {
+  const checked = checkDiySelection(value);
+  if (!checked.ok) { toast('同一名外援只能选择一次', 'warn'); return false; }
+  savePref(LOADOUT_PREF, toStored(loadoutStore.get().entries, checked.diy));
+  loadoutStore.set({ diy: checked.diy });
+  return true;
 }
 
 /**
  * Apply a parsed entry map (an imported preset). Sanitised against the loaded data first, then persisted and synced
  * like any ordinary edit — so a preset from another build never sends the server an entry it would refuse. An import
- * that keeps nothing (every chess unknown, or every choice already the default) changes NOTHING: wiping the current
- * loadout over it would be a loss the player never asked for.
+ * Legacy imports that keep nothing leave the current loadout alone. An external preset can intentionally carry no
+ * non-default entries, so it replaces both selections and entries; an accepted legacy preset migrates to empty DIY.
  * @param {Record<string, any>} entries `parseImport(...).entries`
  * @param {(id: string) => any} lookup chess lookup
+ * @param {object|undefined} diy optional selection from a parsed preset
  * @returns {{ applied: number, dropped: number }} entries kept / entries that were not imported
  */
-export function applyLoadoutEntries(entries, lookup) {
+export function applyLoadoutEntries(entries, lookup, diy = undefined) {
   const asked = Object.keys(entries || {}).length;
+  const checked = diy === undefined ? null : checkDiySelection(diy);
+  if (checked && !checked.ok) return { applied: 0, dropped: asked };
   const clean = sanitizeEntries(entries, lookup);
   const applied = Object.keys(clean).length;
-  if (applied) setEntries(clean);
+  if (applied || checked?.ok) {
+    setEntries(clean);
+    setDiy(checked?.diy || checkDiySelection().diy);
+  }
   return { applied, dropped: Math.max(0, asked - applied) };
 }
 
@@ -110,7 +126,8 @@ export function installLoadoutSync({ net, getChessReady, lookupChess, timers, ta
       // never sanitise against missing data: every entry would be dropped and the server's copy cleared
       if (loaded == null) { setState('error'); return; }
       const entries = empty ? {} : sanitizeEntries(target.get().entries, lookup);
-      const json = JSON.stringify(entries);
+      const payload = { entries, ...(target.get().diy ? { diy: target.get().diy } : {}) };
+      const json = JSON.stringify(payload);
       if (json === pendingJson) return; // the same content is already on its way
       if (json === lastSent && pendingJson == null) { edited = false; setState('synced'); return; }
       const my = ++seq;
@@ -119,7 +136,7 @@ export function installLoadoutSync({ net, getChessReady, lookupChess, timers, ta
       pendingJson = json;
       setState('sending');
       try {
-        await net.request('room.loadout', { entries });
+        await net.request('room.loadout', payload);
         if (my !== seq) return;
         pendingJson = null;
         lastSent = json;
@@ -144,7 +161,7 @@ export function installLoadoutSync({ net, getChessReady, lookupChess, timers, ta
 
   const offWelcome = net.on('welcome', () => { lastSent = null; pendingJson = null; seq++; schedule(50); });
   const offStore = target.subscribe((s, prev) => {
-    if (s.entries !== prev.entries) { edited = true; schedule(); }
+    if (s.entries !== prev.entries || s.diy !== prev.diy) { edited = true; schedule(); }
     // closing the overlay sends a pending edit at once (review fix): the player's next click — 准备就绪 in the solo
     // briefing, 开始模拟 in the room — must not overtake the debounced room.loadout (the match locks its loadout when
     // INFO_CHECK ends, so a late edit would silently only apply to the next match). Same socket ⇒ ordered.

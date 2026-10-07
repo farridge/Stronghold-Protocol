@@ -170,3 +170,19 @@ export class SharedPool {
     return n;
   }
 }
+
+/** A view over shared fixed copies and this player's selected external copies. */
+export class PlayerPool extends SharedPool {
+  constructor(gd, shared, diy) {
+    super(gd, { banned: gd.visibleChess });
+    this.shared = shared;
+    this.privateEntries = this._entries;
+    for (const id of Object.values(diy).flat().filter(Boolean)) {
+      const cap = gd.poolCopies(id);
+      this.privateEntries.set(id, { cap, left: cap, tier: gd.tierOf(id) });
+    }
+  }
+  // A fresh map contains references to the original counters, never copies of them.
+  get entries() { return new Map([...(this.shared?.entries || []), ...(this.privateEntries || this._entries || [])]); }
+  set entries(value) { this._entries = value; }
+}

@@ -78,6 +78,7 @@
 //     a player seat (the seat is kept and given back on resume).
 
 import { randomBytes, randomInt } from 'node:crypto';
+import { checkDiySelection } from '../shared/diy.js';
 import { ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
 import { checkLoadout } from '../shared/protocol.js';
 import { encode, isDroppable, isErrCode, sendRaw, sendSession } from './net.js';
@@ -550,21 +551,24 @@ export class Lobby {
    * room.loadout (DESIGN §16): check the operator loadout against the game data, store it on the session and the seat,
    * and — while a match runs — hand it to the match (accepted only during INFO_CHECK, see the header).
    */
-  loadout(session, { entries }) {
+  loadout(session, { entries, diy = undefined }) {
+    const checked = checkDiySelection(diy ?? session.diy);
+    if (!checked.ok) return fail(checked.error, checked.detail);
     const data = this.safeData();
     const res = checkLoadout(entries, (id) => lookup('chess', id, data));
     if (!res || res.error) return fail(res && isErrCode(res.error) ? res.error : ERR.BAD_MSG, res && res.detail);
     const loadout = freezeLoadout(res.loadout);
     session.loadout = loadout;
+    session.diy = checked.diy;
     const room = this.roomOf(session);
     if (!room) return OK;
     const seat = room.seatOf(session.playerId);
-    if (seat) seat.loadout = loadout;
+    if (seat) { seat.loadout = loadout; seat.diy = checked.diy; }
     if (!room.match || !seat) return OK; // a spectator's loadout stays on its session, never reaching the match
     if (typeof room.match.setLoadout !== 'function') return fail(ERR.ROOM_STARTED, 'stored for the next match');
     let r;
     try {
-      r = room.match.setLoadout(session.playerId, loadout);
+      r = room.match.setLoadout(session.playerId, loadout, checked.diy);
     } catch (e) {
       this.log.error(`[lobby] ${room.code} match.setLoadout threw`, e);
       return fail(ERR.INTERNAL);
@@ -587,6 +591,7 @@ export class Lobby {
       seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, connected: s.connected,
       // DESIGN §16: the human's checked operator loadout (bots fight with the defaults)
       loadout: s.isBot ? null : s.loadout || null,
+      diy: s.isBot ? undefined : s.diy,
     }));
     // lastPublic / results: the latest m.public broadcast and the m.result frames (encoded), kept for the replay.
     const ctx = { live: true, ended: false, disposed: false, match: null, lastPublic: null, sharedResult: null, results: new Map() };
@@ -845,6 +850,7 @@ export class Lobby {
     return {
       seat: idx, playerId: session.playerId, name: session.name, isBot: false, ready: false, connected: session.connected, left: false,
       loadout: session.loadout || null,
+      diy: session.diy,
     };
   }
 

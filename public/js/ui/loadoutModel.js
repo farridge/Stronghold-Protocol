@@ -1,3 +1,4 @@
+import { checkDiySelection } from '../../../shared/diy.js';
 // Operator loadout model (DESIGN §16) — pure logic of the 干员调配 screen (screens/loadout.js), shared with the sync
 // (ui/loadoutSync.js) and usable by the in-match UI (shop cards / detail panel: `effectiveChoice`, `selectedSkill`).
 //
@@ -56,7 +57,7 @@ export function parseStored(raw) {
 }
 
 /** Serialised form for localStorage. */
-export const toStored = (entries) => ({ v: LOADOUT_VERSION, entries: entries || {} });
+export const toStored = (entries, diy) => ({ v: LOADOUT_VERSION, entries: entries || {}, ...(diy ? { diy } : {}) });
 
 // ---- export / import ----------------------------------------------------------------------------------------------
 
@@ -74,7 +75,7 @@ export const LOADOUT_IMPORT_MAX_BYTES = 256 * 1024;
  * @param {Record<string, any>} entries `room.loadout.entries`
  * @param {{ now?: number }} [o]
  */
-export function exportPayload(entries, { now = Date.now() } = {}) {
+export function exportPayload(entries, { now = Date.now(), diy } = {}) {
   const clean = {};
   for (const [id, e] of Object.entries(entries || {})) if (isObj(e)) clean[id] = { ...e };
   return {
@@ -83,6 +84,7 @@ export function exportPayload(entries, { now = Date.now() } = {}) {
     exportedAt: new Date(Number.isFinite(now) ? now : Date.now()).toISOString(),
     count: Object.keys(clean).length,
     entries: clean,
+    ...(diy ? { diy } : {}),
   };
 }
 
@@ -114,8 +116,9 @@ export function parseImport(input) {
   const kind = typeof raw.kind === 'string' ? raw.kind : null;
   if (kind && kind !== LOADOUT_EXPORT_KIND) return { ok: false, error: '这不是干员调配的数据' };
   const entries = parseStored(raw);
-  if (!Object.keys(entries).length) return { ok: false, error: '里面没有有效的调配条目' };
-  return { ok: true, entries };
+  if (!Object.keys(entries).length && !raw.diy) return { ok: false, error: '里面没有有效的调配条目' };
+  if (raw.diy && !checkDiySelection(raw.diy).ok) return { ok: false, error: '外援选择无效或重复' };
+  return { ok: true, entries, ...(raw.diy ? { diy: checkDiySelection(raw.diy).diy } : {}) };
 }
 
 // ---- options & choices ---------------------------------------------------------------------------------------------
@@ -265,11 +268,11 @@ export function selectedModule(loadout, chess, getChess) {
  * @param {any[]} list data.list('chess')
  */
 /** Whether a chess record is a loadout slot (a visible normal chess — what the server's checkLoadout accepts). */
-export const isLoadoutSlot = (c) => !!c && !c.isGolden && c.visible !== false && !c.isHidden && !c.isDiy && (!c.baseId || c.baseId === c.chessId);
+export const isLoadoutSlot = (c) => !!c && !c.isGolden && (c.diyAvailable || (c.visible !== false && !c.isDiy)) && !c.isHidden && (!c.baseId || c.baseId === c.chessId);
 
 export function rosterOf(list) {
   return (Array.isArray(list) ? list : [])
-    .filter(isLoadoutSlot)
+    .filter((c) => isLoadoutSlot(c) && !c.isDiy)
     .sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0) || (a.shopSortId ?? 0) - (b.shopSortId ?? 0) || String(a.chessId).localeCompare(String(b.chessId)));
 }
 
