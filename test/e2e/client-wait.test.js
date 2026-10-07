@@ -27,10 +27,15 @@ function fakePage(trueAfter) {
   };
 }
 
-test('a wait longer than one slice keeps polling the same predicate until it holds', async () => {
+test('a wait longer than one slice keeps polling the same predicate until it holds', async (t) => {
+  // Wall-clock timer overshoot under a busy full suite can turn four 30 ms slices into three. Keep the predicate
+  // and the retry count deterministic while still driving the real async wait loop and its fake page timers.
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
   const page = fakePage(95);
   const fn = () => true;
-  const got = await waitForFunctionLong(page, fn, { timeout: 1000, polling: 200, slice: 30 }, 'a', 2);
+  const pending = waitForFunctionLong(page, fn, { timeout: 1000, polling: 200, slice: 30 }, 'a', 2);
+  for (let i = 0; i < 4; i++) { t.mock.timers.tick(30); await Promise.resolve(); }
+  const got = await pending;
   assert.deepEqual(got, { handle: 'ok', args: ['a', 2] });
   assert.ok(page.calls.length >= 4, `sliced (${page.calls.length} calls)`);
   for (const c of page.calls) {
