@@ -1063,6 +1063,5 @@
   "瞬发": "Instant",
   "部署触发": "On deployment",
   "模组仅在精锐形态生效": "Modules apply only to the Elite form",
-  "{name}：切换普通／精锐预览": "{name}: toggle Normal/Elite preview",
   "仅切换预览，不改变干员等级或配置": "Preview only; does not change the Operator's level or loadout"
 }
