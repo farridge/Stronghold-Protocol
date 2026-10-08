@@ -110,11 +110,14 @@ describe('quick loadout configuration (real server)', { skip: !enabled && 'set S
       await page.setViewport({ width, height });
       const layout = await page.evaluate(() => {
         const grid = document.querySelector('.lo-grid');
+        const columns = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+        const rowEnd = grid.children[columns - 1].getBoundingClientRect().right;
         const buttons = [...document.querySelectorAll('.lo-quick-skill, .lo-quick-module')];
         return {
           overflow: document.querySelector('.lo').scrollWidth > innerWidth + 1,
           gridOverflow: grid.scrollWidth > grid.clientWidth + 1,
-          columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          columns,
+          rightGutter: document.querySelector('.lo-roster').getBoundingClientRect().right - rowEnd,
           controls: buttons.every((b) => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44),
           portraitFirst: [...document.querySelectorAll('.lo-card')].every((c) => {
             const art = c.querySelector('.lo-card__art').getBoundingClientRect();
@@ -136,6 +139,7 @@ describe('quick loadout configuration (real server)', { skip: !enabled && 'set S
       });
       assert.equal(layout.overflow, false, `${width}: page overflow`);
       assert.equal(layout.gridOverflow, false, `${width}: roster overflow`);
+      assert.ok(layout.rightGutter <= 20, `${width}: cards must fill the roster width, ${JSON.stringify(layout)}`);
       assert.equal(layout.controls, true, `${width}: 44px quick controls`);
       assert.equal(layout.portraitFirst, true, `${width}: the portrait is larger than the skill artwork`);
       assert.equal(layout.iconsOnly, true, `${width}: quick skills show artwork without captions`);
