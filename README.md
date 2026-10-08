@@ -3,8 +3,9 @@
 本分支仅用于公开 PR 的实际界面截图，不合并到游戏分支，不进入客户端发行包。
 
 - `before-desktop-zh.png`：上游 0.2.1 基线 `c2a2ef778cf728ff29b953b9842b2a39b1e9cbea`，1920×1080。
-- `after-desktop-zh.png`：快捷技能、模组选择及完整触发条件，1920×1080。
+- `after-desktop-zh.png`：头像覆盖名称与盟约、技能图标、模组类型小标及统一普通／精锐预览，1920×1080。
 - `after-desktop-en.png`：同一界面的英文版本，1920×1080。
-- `after-phone-landscape.png`：手机横屏三列快捷配置，667×375。
+- `after-phone-landscape.png`：手机横屏两列快捷配置，667×375。
+- `after-phone-portrait.png`：手机竖屏快捷配置，390×844。
 
 均由本地真实界面截取；游戏美术及角色版权归原权利人所有。本分支不包含单独的游戏素材或下载清单。
