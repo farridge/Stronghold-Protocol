@@ -195,6 +195,14 @@ describe('GitHub issue #8 item 1: 本局信息 in the strategy draft (real serve
     assert.deepEqual(brief.groups, want.groups, 'each alliance lists exactly its banned operators, with tier and ban marks');
     assert.equal(brief.count, String(want.names.length));
     assert.match(brief.legend, /或本模式禁用/);
+    // 0.2.3 text-size settings must also scale the alliance rows introduced by this PR.
+    const banFonts = () => page.evaluate(() => ['.brief-banned__n', '.brief-banned__bond .bond__name']
+      .map((sel) => parseFloat(getComputedStyle(document.querySelector(sel)).fontSize)));
+    const smallFonts = await banFonts();
+    await page.evaluate(async () => (await import('/js/ui/settings.js')).updateSettings({ textSize: 'xl' }));
+    const largeFonts = await banFonts();
+    assert.ok(largeFonts.every((size, i) => size > smallFonts[i] * 1.25), `banned count and alliance names grow: ${smallFonts} → ${largeFonts}`);
+    await page.evaluate(async () => (await import('/js/ui/settings.js')).updateSettings({ textSize: 'sm' }));
     await shot(page, 'solo-briefing');
     await page.$eval('.brief__right', (el) => {
       el.scrollTop += el.querySelector('.brief-banned').getBoundingClientRect().top - el.getBoundingClientRect().top - 8;
